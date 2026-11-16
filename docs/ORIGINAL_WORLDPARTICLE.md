@@ -2,9 +2,9 @@
 
 WorldParticle is a particle trajectory model built around local continuous convolutions, iterative `k`-partite token merging, and a super-particle decoder. The model supports both single-item and multi-item batches. The supplied inference CLI rolls out one sample at a time and predicts positions and velocities autoregressively.
 
-The separate shared VBD-replacement research, official Newton demo coverage, training records, and native inference commands are documented in [official demo training](docs/official_demo_training.md).
+The separate shared VBD-replacement research, official Newton demo coverage, training records, and native inference commands are documented in [current shared VBD architecture](CURRENT_ARCHITECTURE.md).
 
-Full-suite data preparation, history operators, and actual per-demo training status are tracked in [all-demo training](docs/all_demo_training.md).
+Full-suite data preparation, history operators, and actual per-demo training status are tracked in [current shared VBD architecture](CURRENT_ARCHITECTURE.md).
 
 The main entry points are:
 
