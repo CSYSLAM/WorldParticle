@@ -1,0 +1,43 @@
+{
+  "stage": "P0",
+  "seed": 20261030,
+  "newton_root": "/home/oem/code/engine/newton",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "worldparticle_base_sha": "b8e37b854f2af3fc9bfd7fc150cfc01cba4a092e",
+  "reference_device": "cuda:0",
+  "deterministic_mode": "RUN_TO_RUN",
+  "collision_deterministic": true,
+  "repeats": 2,
+  "warmup_frames": 3,
+  "repeatability_atol": 1e-6,
+  "repeatability_rtol": 1e-5,
+  "worker_timeout_seconds": 600,
+  "cases": {
+    "softbody": {
+      "module": "newton.examples.softbody.example_softbody_hanging",
+      "frames": 100,
+      "arguments": ["--solver", "vbd"]
+    },
+    "cloth": {
+      "module": "newton.examples.cloth.example_cloth_hanging",
+      "frames": 100,
+      "arguments": ["--solver", "vbd", "--width", "8", "--height", "8"]
+    },
+    "rigid": {
+      "module": "newton.examples.vbd.example_vbd_rigid_rigid_contact",
+      "frames": 360,
+      "arguments": []
+    },
+    "rod": {
+      "module": "newton.examples.vbd.example_cable_bend_stiffness",
+      "frames": 510,
+      "arguments": []
+    },
+    "joints": {
+      "module": "newton.examples.basic.example_basic_joints",
+      "frames": 500,
+      "arguments": [],
+      "argument_overrides": {"solver": "vbd"}
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "demo": "vbd.example_cable_twist_transfer",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "frames": 390,
+  "budgets": [
+    128,
+    256
+  ],
+  "data_dir": ".local/vector_holdout_v19",
+  "report_dir": "reports/vector_holdout_v19",
+  "position_refinement_limit_over_L": 0.002,
+  "orientation_refinement_limit_rad": 0.002,
+  "episodes": [
+    {
+      "name": "fresh133",
+      "factor": 1.33,
+      "split": "test"
+    }
+  ],
+  "frozen_before_v19_training": true,
+  "scope": "New material test, no new geometry claim. Material1.17 is development. Reference refinement does not admit labels into training."
+}

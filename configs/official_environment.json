@@ -1,0 +1,20 @@
+{
+  "python": "3.12.13",
+  "packages": {
+    "torch": "2.7.1+cu128",
+    "numpy": "1.26.4",
+    "warp-lang": "1.17.0",
+    "usd-core": "26.3",
+    "pyglet": "2.1.14",
+    "imgui-bundle": "1.92.801",
+    "glfw": "2.10.0",
+    "PyOpenGL": "3.1.10",
+    "Pillow": "13.0.0"
+  },
+  "newton_root": "/home/oem/code/engine/newton",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "torch_environment": ".venv",
+  "offline_reference_environment": "uv run --no-sync --offline --project /home/oem/code/engine/newton python",
+  "deterministic_algorithms": true,
+  "CUBLAS_WORKSPACE_CONFIG": ":4096:8"
+}

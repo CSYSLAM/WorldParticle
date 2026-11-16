@@ -1,0 +1,36 @@
+{
+  "name": "Hinged bar — shared model",
+  "family": "joint",
+  "geometry": {
+    "type": "hinged_bar",
+    "half_extents": [
+      0.12,
+      0.025,
+      0.025
+    ],
+    "axis": [
+      0,
+      1,
+      0
+    ]
+  },
+  "material": {
+    "mass": 0.45,
+    "linear_ke": 20000.0,
+    "angular_ke": 2000.0,
+    "damping": 0.0
+  },
+  "position": [
+    0,
+    0,
+    2
+  ],
+  "gravity": [
+    0,
+    0,
+    -4.8
+  ],
+  "dt": 0.008333333333333333,
+  "reference_length": 0.4,
+  "contacts": false
+}

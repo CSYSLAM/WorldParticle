@@ -1,0 +1,234 @@
+{
+  "name": "Mixed shared response model",
+  "family": "mixed",
+  "gravity": [
+    0,
+    0,
+    -4.8
+  ],
+  "dt": 0.008333333333333333,
+  "steps": 240,
+  "objects": [
+    {
+      "name": "joint",
+      "family": "joint",
+      "geometry": {
+        "type": "hinged_bar",
+        "half_extents": [
+          0.12,
+          0.025,
+          0.025
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ]
+      },
+      "material": {
+        "mass": 0.45,
+        "linear_ke": 20000.0,
+        "angular_ke": 2000.0,
+        "damping": 0.0
+      },
+      "position": [
+        -0.7,
+        -0.4,
+        0.13
+      ],
+      "gravity": [
+        0,
+        0,
+        -4.8
+      ],
+      "dt": 0.008333333333333333,
+      "reference_length": 0.4,
+      "contacts": false
+    },
+    {
+      "name": "free_box",
+      "family": "rigid",
+      "geometry": {
+        "type": "box",
+        "half_extents": [
+          0.08,
+          0.06,
+          0.05
+        ]
+      },
+      "position": [
+        -0.7,
+        0.05,
+        0.25
+      ],
+      "velocity": [
+        0.45,
+        0,
+        0
+      ],
+      "material": {
+        "mass": 0.5,
+        "damping": 0
+      },
+      "friction": 0.4
+    },
+    {
+      "name": "softbody",
+      "family": "softbody",
+      "geometry": {
+        "type": "tet_grid",
+        "resolution": [
+          2,
+          1,
+          1
+        ],
+        "size": [
+          0.24,
+          0.12,
+          0.12
+        ]
+      },
+      "material": {
+        "mu": 12000,
+        "lmbd": 18000,
+        "density": 800.0,
+        "damping": 0.0
+      },
+      "pins": {
+        "indices": []
+      },
+      "position": [
+        -0.15,
+        -0.4,
+        0.1
+      ],
+      "gravity": [
+        0,
+        0,
+        -4.8
+      ],
+      "dt": 0.008333333333333333,
+      "reference_length": 0.4,
+      "contacts": false,
+      "velocity": [
+        0.25,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "cloth",
+      "family": "cloth",
+      "geometry": {
+        "type": "obj",
+        "path": "cloth_patch.obj"
+      },
+      "material": {
+        "mu": 110.0,
+        "lmbd": 165.0,
+        "mass": 0.03,
+        "bending": 0.04,
+        "damping": 0.0
+      },
+      "pins": {
+        "axis": "x",
+        "side": "min"
+      },
+      "position": [
+        0.5,
+        -0.4,
+        0.16
+      ],
+      "gravity": [
+        0,
+        0,
+        -4.8
+      ],
+      "dt": 0.008333333333333333,
+      "reference_length": 0.4,
+      "contacts": false,
+      "velocity": [
+        0.25,
+        0,
+        0
+      ],
+      "rotation_xyzw": [
+        0,
+        0.17364817766693033,
+        0,
+        0.984807753012208
+      ]
+    },
+    {
+      "name": "rod",
+      "family": "rod",
+      "geometry": {
+        "type": "rod",
+        "points": [
+          [
+            0.0,
+            0,
+            0
+          ],
+          [
+            0.1,
+            0,
+            0
+          ],
+          [
+            0.2,
+            0,
+            0
+          ],
+          [
+            0.30000000000000004,
+            0,
+            0
+          ],
+          [
+            0.4,
+            0,
+            0
+          ]
+        ],
+        "radius": 0.015
+      },
+      "material": {
+        "stretch": 2000.0,
+        "shear": 1400.0,
+        "bending": 0.2,
+        "twist": 0.14,
+        "density": 1000.0,
+        "damping": 0.0
+      },
+      "fixed_segments": [
+        0
+      ],
+      "position": [
+        -0.4,
+        0.5,
+        0.035
+      ],
+      "gravity": [
+        0,
+        0,
+        -4.8
+      ],
+      "dt": 0.008333333333333333,
+      "reference_length": 0.4,
+      "contacts": false
+    }
+  ],
+  "contacts": "plane",
+  "plane": {
+    "height": 0,
+    "activation_radius": 0.01,
+    "rigid_margin": 0.01,
+    "particle_mu": 0.4,
+    "ground_mu": 0.4,
+    "ke": 5000,
+    "kd": 0,
+    "friction_epsilon": 0.01
+  },
+  "contract": "finite_elastic_plane_ipc_v1"
+}

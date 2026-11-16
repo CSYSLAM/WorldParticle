@@ -1,0 +1,11 @@
+{
+  "frozen_before_optimization": true,
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "official_material_factors": {
+    "softbody.example_softbody_hanging": 1.07,
+    "vbd.example_cloth_stiff_material_hanging": 1.07,
+    "basic.example_basic_dzhanibekov": 1.07,
+    "vbd.example_cable_twist_transfer": 1.41
+  },
+  "scope": "Separate future material test protocol. No claim of new topology or complete geometry acceptance. References must pass the same fixed-h qualification; no model test is used for weight selection."
+}

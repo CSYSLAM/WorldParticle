@@ -1,0 +1,21 @@
+{
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "data_dir": ".local/qualified_windows_v20",
+  "report_dir": "reports/qualified_windows_v20",
+  "windows_per_episode": 16,
+  "horizon": 2,
+  "position_limit_over_L": 0.0004,
+  "orientation_limit_rad": 0.0004,
+  "scaled_velocity_limit": 0.0004,
+  "initial_roundtrip_limit_over_L": 0.000001,
+  "families": [
+    {"name": "cloth", "demo": "vbd.example_cloth_stiff_material_hanging", "initial_state_budget": 2048, "query_budgets": [2048, 4096]},
+    {"name": "rigid", "demo": "basic.example_basic_dzhanibekov", "initial_state_budget": 8, "query_budgets": [16, 32]}
+  ],
+  "episodes": [
+    {"name": "train", "factor": 1.0, "split": "train"},
+    {"name": "train_extra", "factor": 1.25, "split": "train"},
+    {"name": "validation", "factor": 1.15, "split": "validation"}
+  ],
+  "scope": "Original full traces supply only legal initial states. Fresh low/high same-input two-step queries provide new labels. Every window must pass all fixed limits; failing full-trajectory refinements remain FAIL. Material episodes stay separated. This is a short-window P4 experiment, not full episode or continuum certification."
+}

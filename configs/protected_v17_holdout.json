@@ -1,0 +1,16 @@
+{
+  "demo": "vbd.example_cable_twist_transfer",
+  "parameter_factor": 1.17,
+  "frames": 390,
+  "budgets": [
+    128,
+    256
+  ],
+  "dt": 0.0016666666666666668,
+  "reference_device": "cpu",
+  "purpose": "Fresh material test for the new active neural architecture; factor1.1 is development regression after v16. No new geometry claim.",
+  "freeze_training_completed_updates": 60,
+  "model_evaluation_before_checkpoint_selection": false,
+  "freeze_progress_counter_is_last_persisted_report": true,
+  "frozen_before_training": false
+}

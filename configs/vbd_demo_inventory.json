@@ -1,0 +1,1094 @@
+{
+  "schema_version": 1,
+  "newton_root": "/home/oem/code/engine/newton",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "acceptance_spec": "docs/acceptance_v1.md",
+  "discovery": "AST references to SolverVBD, including directly imported aliases; comments and filenames alone do not qualify",
+  "coverage_limit": "Static candidate inventory, not an exhaustive solver-mode list or proof of actual VBD execution. Indirect wrappers require manual review; nothing is silently marked out of scope.",
+  "candidate_count": 51,
+  "categories": {
+    "basic": 7,
+    "cable": 7,
+    "cloth": 6,
+    "contacts": 4,
+    "multiphysics": 11,
+    "softbody": 2,
+    "vbd": 14
+  },
+  "examples": [
+    {
+      "id": "basic.example_basic_conveyor",
+      "category": "basic",
+      "module": "newton.examples.basic.example_basic_conveyor",
+      "source": "newton/examples/basic/example_basic_conveyor.py",
+      "source_sha256": "88cc7cb84b32ec1e0382f5ad3df1902123d04bd71dfc549e65ba7e4325185a8c",
+      "vbd_constructor_lines": [
+        389
+      ],
+      "vbd_reference_lines": [
+        389
+      ],
+      "literal_solver_choices": [
+        "xpbd",
+        "vbd",
+        "kamino"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "basic.example_basic_conveyor_forces",
+      "category": "basic",
+      "module": "newton.examples.basic.example_basic_conveyor_forces",
+      "source": "newton/examples/basic/example_basic_conveyor_forces.py",
+      "source_sha256": "3164148e180cd07576162408b73e8bb3f223b9eadf7946a8e5ae6e3fb9fe3037",
+      "vbd_constructor_lines": [
+        801
+      ],
+      "vbd_reference_lines": [
+        801
+      ],
+      "literal_solver_choices": [
+        "xpbd",
+        "vbd",
+        "mujoco",
+        "kamino"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "basic.example_basic_dzhanibekov",
+      "category": "basic",
+      "module": "newton.examples.basic.example_basic_dzhanibekov",
+      "source": "newton/examples/basic/example_basic_dzhanibekov.py",
+      "source_sha256": "72f16cbad42d0a8ceaffc1e9fc56faa99a3e417132bb4658645227bfe832d44d",
+      "vbd_constructor_lines": [
+        103
+      ],
+      "vbd_reference_lines": [
+        103
+      ],
+      "literal_solver_choices": [
+        "vbd",
+        "xpbd",
+        "mujoco",
+        "kamino"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "basic.example_basic_joints",
+      "category": "basic",
+      "module": "newton.examples.basic.example_basic_joints",
+      "source": "newton/examples/basic/example_basic_joints.py",
+      "source_sha256": "908dd8d8aa5674aeb1ef2dcb80200338c0a700beb0fd5f63abebe389c2797f57",
+      "vbd_constructor_lines": [
+        190
+      ],
+      "vbd_reference_lines": [
+        190
+      ],
+      "literal_solver_choices": [
+        "xpbd",
+        "vbd",
+        "kamino"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "basic.example_basic_mimic_joint",
+      "category": "basic",
+      "module": "newton.examples.basic.example_basic_mimic_joint",
+      "source": "newton/examples/basic/example_basic_mimic_joint.py",
+      "source_sha256": "95e906f35ddc33771ea522c3203575428eb4f8b76a65b37e36930aba16fc0ec3",
+      "vbd_constructor_lines": [
+        223
+      ],
+      "vbd_reference_lines": [
+        223
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "basic.example_basic_shapes",
+      "category": "basic",
+      "module": "newton.examples.basic.example_basic_shapes",
+      "source": "newton/examples/basic/example_basic_shapes.py",
+      "source_sha256": "6664116c9ff4210f4e8cfaea0814c7cbb4706b53b67862fb19c7a450189aa2e8",
+      "vbd_constructor_lines": [
+        108
+      ],
+      "vbd_reference_lines": [
+        108
+      ],
+      "literal_solver_choices": [
+        "vbd",
+        "xpbd",
+        "kamino"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "basic.example_basic_urdf",
+      "category": "basic",
+      "module": "newton.examples.basic.example_basic_urdf",
+      "source": "newton/examples/basic/example_basic_urdf.py",
+      "source_sha256": "fcaf1d6a3211d9690743326c77024a6eb87d5c4947d2507196addb673811d669",
+      "vbd_constructor_lines": [
+        94
+      ],
+      "vbd_reference_lines": [
+        94
+      ],
+      "literal_solver_choices": [
+        "vbd",
+        "xpbd",
+        "kamino"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cable.example_cable_bundle_hysteresis",
+      "category": "cable",
+      "module": "newton.examples.cable.example_cable_bundle_hysteresis",
+      "source": "newton/examples/cable/example_cable_bundle_hysteresis.py",
+      "source_sha256": "afaf1b39e7353d40e620c34023c824c048adb41f35f93662cc397a485cf162da",
+      "vbd_constructor_lines": [
+        292
+      ],
+      "vbd_reference_lines": [
+        187,
+        292
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cable.example_cable_cross_slide_table",
+      "category": "cable",
+      "module": "newton.examples.cable.example_cable_cross_slide_table",
+      "source": "newton/examples/cable/example_cable_cross_slide_table.py",
+      "source_sha256": "be3f2286a438746f4ad921ef5ea31bdb3c42db8ad151decef04275f4254301e7",
+      "vbd_constructor_lines": [
+        740
+      ],
+      "vbd_reference_lines": [
+        740
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cable.example_cable_initial_rest_pose",
+      "category": "cable",
+      "module": "newton.examples.cable.example_cable_initial_rest_pose",
+      "source": "newton/examples/cable/example_cable_initial_rest_pose.py",
+      "source_sha256": "c62ee4aa16e211730d8c989076ddf7bc91808003a785d2b305534148754bfb65",
+      "vbd_constructor_lines": [
+        140
+      ],
+      "vbd_reference_lines": [
+        140
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cable.example_cable_pile",
+      "category": "cable",
+      "module": "newton.examples.cable.example_cable_pile",
+      "source": "newton/examples/cable/example_cable_pile.py",
+      "source_sha256": "27944f81dd7fbcc7da66c708f0cae22d9bca65a8587de3459f96177ab367a3f2",
+      "vbd_constructor_lines": [
+        171
+      ],
+      "vbd_reference_lines": [
+        171
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cable.example_cable_plectoneme",
+      "category": "cable",
+      "module": "newton.examples.cable.example_cable_plectoneme",
+      "source": "newton/examples/cable/example_cable_plectoneme.py",
+      "source_sha256": "6166bf42f013b7b1c6d0c4a4a0ff5f4d9b6fe3526c59afc9562d89a7fb5243b0",
+      "vbd_constructor_lines": [
+        168
+      ],
+      "vbd_reference_lines": [
+        168
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cable.example_cable_twist",
+      "category": "cable",
+      "module": "newton.examples.cable.example_cable_twist",
+      "source": "newton/examples/cable/example_cable_twist.py",
+      "source_sha256": "1e74de0522baa9e62fbe67df73e282e5861f36dda49c194b1a14185665a45b51",
+      "vbd_constructor_lines": [
+        215
+      ],
+      "vbd_reference_lines": [
+        215
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cable.example_cable_y_junction",
+      "category": "cable",
+      "module": "newton.examples.cable.example_cable_y_junction",
+      "source": "newton/examples/cable/example_cable_y_junction.py",
+      "source_sha256": "b2666db6fefec0c5c41b1266dd33b5f9b4095911259631e382e1643ba5477b8a",
+      "vbd_constructor_lines": [
+        117
+      ],
+      "vbd_reference_lines": [
+        117
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cloth.example_cloth_bending",
+      "category": "cloth",
+      "module": "newton.examples.cloth.example_cloth_bending",
+      "source": "newton/examples/cloth/example_cloth_bending.py",
+      "source_sha256": "5891c8ed17124b718c00b6152798f6153c58fbd6f3e96ed8d10f389bbbabab07",
+      "vbd_constructor_lines": [
+        88
+      ],
+      "vbd_reference_lines": [
+        88
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cloth.example_cloth_franka",
+      "category": "cloth",
+      "module": "newton.examples.cloth.example_cloth_franka",
+      "source": "newton/examples/cloth/example_cloth_franka.py",
+      "source_sha256": "19c9a300b2dca0f1a88c1461553a608cf97d4c8b76c4cb722092e353b5ddbccc",
+      "vbd_constructor_lines": [
+        219
+      ],
+      "vbd_reference_lines": [
+        216,
+        219
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cloth.example_cloth_hanging",
+      "category": "cloth",
+      "module": "newton.examples.cloth.example_cloth_hanging",
+      "source": "newton/examples/cloth/example_cloth_hanging.py",
+      "source_sha256": "84faa9214905b0233775fd20407339f9e996f1d36975efc51c7911b810dc0e5d",
+      "vbd_constructor_lines": [
+        132
+      ],
+      "vbd_reference_lines": [
+        132
+      ],
+      "literal_solver_choices": [
+        "semi_implicit",
+        "style3d",
+        "xpbd",
+        "vbd"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cloth.example_cloth_poker_cards",
+      "category": "cloth",
+      "module": "newton.examples.cloth.example_cloth_poker_cards",
+      "source": "newton/examples/cloth/example_cloth_poker_cards.py",
+      "source_sha256": "93aac9bec394d88cb662a9a70015ca72961cd3ae003cc4695a53a077ebea38bf",
+      "vbd_constructor_lines": [
+        205
+      ],
+      "vbd_reference_lines": [
+        205
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cloth.example_cloth_rollers",
+      "category": "cloth",
+      "module": "newton.examples.cloth.example_cloth_rollers",
+      "source": "newton/examples/cloth/example_cloth_rollers.py",
+      "source_sha256": "18a3edbd64efaeea04ff01bd83f226c7db70adf0384496419bc5a399d99fbe8d",
+      "vbd_constructor_lines": [
+        377
+      ],
+      "vbd_reference_lines": [
+        377
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "cloth.example_cloth_twist",
+      "category": "cloth",
+      "module": "newton.examples.cloth.example_cloth_twist",
+      "source": "newton/examples/cloth/example_cloth_twist.py",
+      "source_sha256": "a30f8d5eb8b11181f990fd18108181ba9f910dc613b195bb8ef802c109cce46c",
+      "vbd_constructor_lines": [
+        180
+      ],
+      "vbd_reference_lines": [
+        180
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "contacts.example_balance_bird",
+      "category": "contacts",
+      "module": "newton.examples.contacts.example_balance_bird",
+      "source": "newton/examples/contacts/example_balance_bird.py",
+      "source_sha256": "3be95c274602f986a40e9d94ce874ce5c0a69023833804113a9ca3f000875cbe",
+      "vbd_constructor_lines": [
+        142
+      ],
+      "vbd_reference_lines": [
+        142
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "contacts.example_contacts_rj45_plug",
+      "category": "contacts",
+      "module": "newton.examples.contacts.example_contacts_rj45_plug",
+      "source": "newton/examples/contacts/example_contacts_rj45_plug.py",
+      "source_sha256": "c931aa7af450760c7ad6824e942bf9c5346e22dfd5d0db2c2ea65a5d544385cf",
+      "vbd_constructor_lines": [
+        395
+      ],
+      "vbd_reference_lines": [
+        395
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "contacts.example_domino_spiral",
+      "category": "contacts",
+      "module": "newton.examples.contacts.example_domino_spiral",
+      "source": "newton/examples/contacts/example_domino_spiral.py",
+      "source_sha256": "57e73604989c13ce95fc56bc562235d06bbd0474306f8a0263538877e33ffa1f",
+      "vbd_constructor_lines": [
+        122
+      ],
+      "vbd_reference_lines": [
+        122
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "contacts.example_newton_cradle",
+      "category": "contacts",
+      "module": "newton.examples.contacts.example_newton_cradle",
+      "source": "newton/examples/contacts/example_newton_cradle.py",
+      "source_sha256": "43c785ddf6ce9e6e8f58f8a9f38a5666c8ca63f96014e4a38d15585a37d9e226",
+      "vbd_constructor_lines": [
+        143
+      ],
+      "vbd_reference_lines": [
+        143
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_franka_cable_ik_pick_place",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_franka_cable_ik_pick_place",
+      "source": "newton/examples/multiphysics/example_franka_cable_ik_pick_place.py",
+      "source_sha256": "2a35e59be495e2be2e7deb173dfe1a65f86aa94ef8fb78584ad4452d156e37af",
+      "vbd_constructor_lines": [
+        315
+      ],
+      "vbd_reference_lines": [
+        161,
+        315
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_mujoco_franka_vbd_cable_admm_solver",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_mujoco_franka_vbd_cable_admm_solver",
+      "source": "newton/examples/multiphysics/example_mujoco_franka_vbd_cable_admm_solver.py",
+      "source_sha256": "71e054cba7301636198a3b174be8bf18d7e79708a8b8c7f73c02f61b16cc8f0c",
+      "vbd_constructor_lines": [
+        219
+      ],
+      "vbd_reference_lines": [
+        129,
+        219
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_mujoco_vbd_admm_solver",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_mujoco_vbd_admm_solver",
+      "source": "newton/examples/multiphysics/example_mujoco_vbd_admm_solver.py",
+      "source_sha256": "c8e4eb8433a7453dd63bf05c32d29a93734718eb65639ad1cccc14ff080db167",
+      "vbd_constructor_lines": [
+        215
+      ],
+      "vbd_reference_lines": [
+        215
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_mujoco_vbd_coupled_solver",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_mujoco_vbd_coupled_solver",
+      "source": "newton/examples/multiphysics/example_mujoco_vbd_coupled_solver.py",
+      "source_sha256": "76e63e083528c81c5c9ed99bebd13b29cf0bb1d55c2a55fd13995978a6fb612f",
+      "vbd_constructor_lines": [
+        171,
+        196
+      ],
+      "vbd_reference_lines": [
+        171,
+        196
+      ],
+      "literal_solver_choices": [
+        "coupled",
+        "vbd"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_proxy_joint_gripper",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_proxy_joint_gripper",
+      "source": "newton/examples/multiphysics/example_proxy_joint_gripper.py",
+      "source_sha256": "2ac8621299ef33c453bca5c1b605f8bc1aacc688fd15bb5992f560f8561c115e",
+      "vbd_constructor_lines": [
+        124
+      ],
+      "vbd_reference_lines": [
+        66,
+        124
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_rigid_soft_contact",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_rigid_soft_contact",
+      "source": "newton/examples/multiphysics/example_rigid_soft_contact.py",
+      "source_sha256": "f0019ea015206bd47ced72a1a4d02d0b7e485c5bdd564a6c441633a23758a5cc",
+      "vbd_constructor_lines": [
+        205
+      ],
+      "vbd_reference_lines": [
+        71,
+        87,
+        205
+      ],
+      "literal_solver_choices": [
+        "semi_implicit",
+        "xpbd",
+        "vbd",
+        "coupled"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_softbody_dropping_to_cloth",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_softbody_dropping_to_cloth",
+      "source": "newton/examples/multiphysics/example_softbody_dropping_to_cloth.py",
+      "source_sha256": "56b4bdff3a108837b764f65f4516a488819738fec10d043657d0088317b12709",
+      "vbd_constructor_lines": [
+        99,
+        116,
+        122
+      ],
+      "vbd_reference_lines": [
+        99,
+        116,
+        122
+      ],
+      "literal_solver_choices": [
+        "vbd",
+        "coupled"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_softbody_gift",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_softbody_gift",
+      "source": "newton/examples/multiphysics/example_softbody_gift.py",
+      "source_sha256": "cf1600b6c8144e912c575f4f6b4d2ec50faa5b987125a995b4d380ebe56750fd",
+      "vbd_constructor_lines": [
+        219
+      ],
+      "vbd_reference_lines": [
+        219
+      ],
+      "literal_solver_choices": [
+        "vbd"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_vbd_dat_rigid_soft",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_vbd_dat_rigid_soft",
+      "source": "newton/examples/multiphysics/example_vbd_dat_rigid_soft.py",
+      "source_sha256": "e7a0d54356eda531583ec6a376102c34ccc1770f6e1d812f74aa596e39b27c90",
+      "vbd_constructor_lines": [
+        146
+      ],
+      "vbd_reference_lines": [
+        146
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_vbd_mpm_coupled_solver",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_vbd_mpm_coupled_solver",
+      "source": "newton/examples/multiphysics/example_vbd_mpm_coupled_solver.py",
+      "source_sha256": "00f86b64445c746fe5915e7024fe6af5f0b564c5e702b45c9dc5f9d9daf7087a",
+      "vbd_constructor_lines": [
+        63
+      ],
+      "vbd_reference_lines": [
+        63
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "multiphysics.example_xpbd_vbd_coupled_solver",
+      "category": "multiphysics",
+      "module": "newton.examples.multiphysics.example_xpbd_vbd_coupled_solver",
+      "source": "newton/examples/multiphysics/example_xpbd_vbd_coupled_solver.py",
+      "source_sha256": "06c7d68838ed726fc7fb90178f4a23b0cd173a87386dd9ba93cfc5ad5e5fc689",
+      "vbd_constructor_lines": [
+        87,
+        116
+      ],
+      "vbd_reference_lines": [
+        87,
+        116
+      ],
+      "literal_solver_choices": [
+        "coupled",
+        "xpbd",
+        "vbd"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "softbody.example_softbody_franka",
+      "category": "softbody",
+      "module": "newton.examples.softbody.example_softbody_franka",
+      "source": "newton/examples/softbody/example_softbody_franka.py",
+      "source_sha256": "f15c5ff2fbeca50cb212acca7ee734e66ac8ac977cb18048a1f4e63c9af7f6ec",
+      "vbd_constructor_lines": [
+        152
+      ],
+      "vbd_reference_lines": [
+        152
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "softbody.example_softbody_hanging",
+      "category": "softbody",
+      "module": "newton.examples.softbody.example_softbody_hanging",
+      "source": "newton/examples/softbody/example_softbody_hanging.py",
+      "source_sha256": "557afc0da731b412eeaf6fb3d330dd6db49e73ca58c30ee19c479ae2d76e3ecb",
+      "vbd_constructor_lines": [
+        75
+      ],
+      "vbd_reference_lines": [
+        75
+      ],
+      "literal_solver_choices": [
+        "vbd"
+      ],
+      "suggested_arguments": [
+        "--solver",
+        "vbd"
+      ],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cable_bend_stiffness",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cable_bend_stiffness",
+      "source": "newton/examples/vbd/example_cable_bend_stiffness.py",
+      "source_sha256": "f6ed29dd4820f3d3b654a7f5e0359d4ec93f525475aa4a68bbaf7db15fb46025",
+      "vbd_constructor_lines": [
+        112
+      ],
+      "vbd_reference_lines": [
+        112
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cable_bend_twist_analytic",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cable_bend_twist_analytic",
+      "source": "newton/examples/vbd/example_cable_bend_twist_analytic.py",
+      "source_sha256": "557a7665950055cd6e1524210778c4399b94281ce92ede727a836a51b9ab4080",
+      "vbd_constructor_lines": [
+        152
+      ],
+      "vbd_reference_lines": [
+        152
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cable_dahl_hysteresis",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cable_dahl_hysteresis",
+      "source": "newton/examples/vbd/example_cable_dahl_hysteresis.py",
+      "source_sha256": "f13e9266ecc0c07ef4054fd3c29bf35e137eff5e84101fc18b87d163b3626926",
+      "vbd_constructor_lines": [
+        127
+      ],
+      "vbd_reference_lines": [
+        101,
+        127
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cable_michell_threshold",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cable_michell_threshold",
+      "source": "newton/examples/vbd/example_cable_michell_threshold.py",
+      "source_sha256": "118b9e1b371caf3ecb752d4a7429036e242bd4b7d889ff1d3bf47d2039e72de9",
+      "vbd_constructor_lines": [
+        136
+      ],
+      "vbd_reference_lines": [
+        136
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cable_torsion_material_mapping",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cable_torsion_material_mapping",
+      "source": "newton/examples/vbd/example_cable_torsion_material_mapping.py",
+      "source_sha256": "9e9877a46aa073733c0173e10f24387bcb5d8d69b79b4c0375a4d6585ce448ed",
+      "vbd_constructor_lines": [
+        166
+      ],
+      "vbd_reference_lines": [
+        166
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cable_twist_buckling",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cable_twist_buckling",
+      "source": "newton/examples/vbd/example_cable_twist_buckling.py",
+      "source_sha256": "f93fcf638aac064e39f57ca1615a2a262a97a26722a4a31052646be58ccaa68a",
+      "vbd_constructor_lines": [
+        197
+      ],
+      "vbd_reference_lines": [
+        197
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cable_twist_transfer",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cable_twist_transfer",
+      "source": "newton/examples/vbd/example_cable_twist_transfer.py",
+      "source_sha256": "062bad1bcbfed3a7dea489cb876aa933f82576de87720988948275463f497da6",
+      "vbd_constructor_lines": [
+        128
+      ],
+      "vbd_reference_lines": [
+        128
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cloth_stiff_material_hanging",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cloth_stiff_material_hanging",
+      "source": "newton/examples/vbd/example_cloth_stiff_material_hanging.py",
+      "source_sha256": "e352c8e1a89e888bd341df3eb02099d06632486ddb27ef39c72a2ec395064067",
+      "vbd_constructor_lines": [
+        84
+      ],
+      "vbd_reference_lines": [
+        84
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_cloth_stiff_material_stretch",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_cloth_stiff_material_stretch",
+      "source": "newton/examples/vbd/example_cloth_stiff_material_stretch.py",
+      "source_sha256": "62850c7360776f7482286eca7e484e61f7f67c26b5da879a2cf467efba8d735e",
+      "vbd_constructor_lines": [
+        135
+      ],
+      "vbd_reference_lines": [
+        135
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_vbd_gripper_soft_grid",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_vbd_gripper_soft_grid",
+      "source": "newton/examples/vbd/example_vbd_gripper_soft_grid.py",
+      "source_sha256": "6d64295dd5d9bcda7016b12d02aa6418e899bcff369c17e87244856ebcefb7ba",
+      "vbd_constructor_lines": [
+        146
+      ],
+      "vbd_reference_lines": [
+        146
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_vbd_gripper_soft_triangle",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_vbd_gripper_soft_triangle",
+      "source": "newton/examples/vbd/example_vbd_gripper_soft_triangle.py",
+      "source_sha256": "209b26c986d56060c3992c6bf6f951d89680dec4d1fd883f0a8af714fb921268",
+      "vbd_constructor_lines": [
+        149
+      ],
+      "vbd_reference_lines": [
+        149
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_vbd_rigid_rigid_contact",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_vbd_rigid_rigid_contact",
+      "source": "newton/examples/vbd/example_vbd_rigid_rigid_contact.py",
+      "source_sha256": "29e13ce03b6e04a6fadf1dba31e7a50d87a9ae7ba3f8512d1f9cb25e3156b9dd",
+      "vbd_constructor_lines": [
+        197
+      ],
+      "vbd_reference_lines": [
+        197
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_vbd_soft_rigid_contact",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_vbd_soft_rigid_contact",
+      "source": "newton/examples/vbd/example_vbd_soft_rigid_contact.py",
+      "source_sha256": "bc28d5d80af4b5ce8a3dc3e558f2d6d11bca62282f060b52c91f646716eb650f",
+      "vbd_constructor_lines": [
+        284
+      ],
+      "vbd_reference_lines": [
+        284
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    },
+    {
+      "id": "vbd.example_vbd_soft_rigid_mix_contact",
+      "category": "vbd",
+      "module": "newton.examples.vbd.example_vbd_soft_rigid_mix_contact",
+      "source": "newton/examples/vbd/example_vbd_soft_rigid_mix_contact.py",
+      "source_sha256": "b79a66330c21b76fcdf022fcc86b57bc115c2136464658d8914789b6bebf6d39",
+      "vbd_constructor_lines": [
+        314
+      ],
+      "vbd_reference_lines": [
+        314
+      ],
+      "literal_solver_choices": [],
+      "suggested_arguments": [],
+      "mode_review": "REQUIRED: static discovery does not establish active runtime path; coupled demos may have non-VBD components",
+      "reference_status": "NOT_RUN",
+      "model_status": "NOT_IMPLEMENTED",
+      "comparison_status": "NOT_RUN"
+    }
+  ]
+}

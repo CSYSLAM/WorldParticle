@@ -1,0 +1,58 @@
+{
+  "name": "mixed_coupled_rollout_v3",
+  "seed": 20261031,
+  "newton_root": "/home/oem/code/engine/newton",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "asset": "assets/live/mixed_attached.json",
+  "contract": "finite_elastic_plane_attachment_v1",
+  "dt": 0.008333333333333333,
+  "steps": 240,
+  "teacher_iterations": 64,
+  "convergence_iterations": 128,
+  "convergence_tolerance_over_L": 0.002,
+  "data_dir": ".local/coupling_v3/data",
+  "report_dir": "reports/coupling_v3/rollout",
+  "checkpoint_dir": "checkpoints/mixed_coupled_rollout_v3",
+  "model": {
+    "width": 64,
+    "rank": 2,
+    "unroll": 4,
+    "relaxation": 0.8,
+    "trust_radius": 0.1,
+    "response_gain": 1.0,
+    "line_search": [
+      1.0,
+      0.5,
+      0.25,
+      0.125,
+      0.0625
+    ],
+    "root_tolerance": [
+      5e-07,
+      2e-06
+    ],
+    "coarse_mode": "rigid",
+    "learned_coarse": true,
+    "coarse_composition": "additive",
+    "coupled_attachments": true
+  },
+  "training": {
+    "steps": 400,
+    "batch_size": 4,
+    "horizon": 12,
+    "learning_rate": 0.0001,
+    "validation_interval": 100,
+    "validation_steps": 48,
+    "gradient_clip": 1.0,
+    "max_seconds": 1200,
+    "batch_seed": 20261101
+  },
+  "scope": {
+    "coupling": "Finite particle-body attachments connect cloth and free rigid; other objects independently contact the plane",
+    "self_contact": false,
+    "default_alm_semantics": false,
+    "interobject_contact": false,
+    "attachment_damping": 0.0
+  },
+  "initialize_from": "/home/oem/code/worldparticle/checkpoints/mixed_coupled_v3/shared.pt"
+}

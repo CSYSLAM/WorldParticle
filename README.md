@@ -1,224 +1,80 @@
-# WorldParticle
+# WorldParticle · Shared VBD Research
 
-WorldParticle is a particle trajectory model built around local continuous convolutions, iterative `k`-partite token merging, and a super-particle decoder. The model supports both single-item and multi-item batches. The supplied inference CLI rolls out one sample at a time and predicts positions and velocities autoregressively.
+当前分支保存跨类型共享动力学模型的研究代码。它在同一套权重下处理软体、布料、刚体、机器人关节关系和 cable/rod，采用共享神经逆响应与有界物理算子协同步进。完整 VBD 仅用于离线教师和独立参考，不参与模型推理、补迭代或失败回退。
 
-The main entry points are:
+原 WorldParticle 的实现保留在 `models/`、`trajectory_model.py` 等文件中，原项目说明见 [原始实现说明](docs/ORIGINAL_WORLDPARTICLE.md)。跨类型共享求解属于本分支新增研究能力。
 
-- `config.yaml`: model, dataset, and rollout settings.
-- `TrajDataset.py`: sample data loading.
-- `trajectory_model.py`: model construction and forward computation.
-- `inference.py` / `inference.bash`: autoregressive rollout inference.
-- `models/particle_network_cross_attn_feat.py`: active model implementation.
+## 当前架构
 
-## Environment
+- 共享特征宽度 **648**，**12** 头注意力，**6** 层编码、**4** 层解码，FFN 宽度 **1296**。
+- 最多 **128** 个 super-token，同时保留完整分辨率的局部关系通路。
+- 活跃神经参数 **46,882,811**；每个物理子步执行 **4** 轮共享更新。
+- 粒子使用平移自由度；刚体与 rod 段使用质心位置和姿态；关节、材料和接触以关系编码。材料、摩擦、质量/惯量和驱动参数进入物理算子及共享条件特征。
 
-The provided `environment.yaml` contains the Python dependencies, but leaves PyTorch and FlashAttention commented out so that the CUDA-specific builds can be installed explicitly. FlashAttention is required for the intended inference speed.
+详细结构、物理边界和验证范围见 [当前架构](docs/CURRENT_ARCHITECTURE.md)，实现配置见 [shared_vbd_648_current.json](configs/shared_vbd_648_current.json)。原始研究目标保留在 [v4.1 方案](docs/plans/WorldParticle_VBD_Replacement_Plan_v4.1.md)。
 
-```bash
-conda env create -f environment.yaml
-conda activate WorldParticle
+## 代码与运行入口
 
-python -m pip install --upgrade pip
-python -m pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 \
-    --index-url https://download.pytorch.org/whl/cu121
-python -m pip install flash-attn==2.8.3 --no-build-isolation
-export ATTN_IMPL=flash_attn
-```
+| 路径 | 用途 |
+|---|---|
+| `src/wp_vbd/` | 共享网络、材料/关节/接触算子、历史状态和 Newton 适配器 |
+| `scripts/run_native_asset_live.py` | 输入资产 JSON、物理参数和权重，打开 Newton 窗口 |
+| `scripts/run_official_live.py` | 官方 demo 的共享模型推理入口 |
+| `scripts/run_franka_soft_grasp.py` | 自建单求解器 Franka + 软块场景 |
+| `scripts/collect_*.py`、`prepare_*.py` | 离线 VBD 采集、数据转换和资格检查 |
+| `scripts/train_normal_shared_648.py` | 多类型混合训练与固定窗口 loss 监控 |
+| `scripts/verify_*.py`、`tests/reference_v310/` | 相关物理、梯度及实现对照检查 |
+| `assets/live/`、`configs/` | 小型静态资产、范围清单和模型配置 |
 
-Set `ATTN_IMPL=flash_attn` before inference. FlashAttention is the required runtime backend for this project.
-
-Open3D is required by the continuous-convolution neighbor search. Verify the core runtime with:
-
-```bash
-python - <<'PY'
-import open3d
-import torch
-import flash_attn
-
-print("torch:", torch.__version__)
-print("cuda available:", torch.cuda.is_available())
-print("open3d:", open3d.__version__)
-print("flash_attn:", flash_attn.__version__)
-PY
-```
-
-## Data Layout
-
-The dataset root is passed to inference as `--data_dir`. Samples are selected by name with `--sample`.
-
-The loader selected by `config.yaml:data` determines the remaining layout.
-
-### NPZ Particle Data
-
-A complete NPZ example is `elastic_drag`, because it uses obstacle features, a topology graph, and an external-force trajectory. Set:
-
-```yaml
-data: elastic_drag
-```
-
-The expected layout is:
-
-```text
-DATA_ROOT/
-  sample_001/
-    sample_001.npz
-  sample_002/
-    sample_002.npz
-```
-
-For the complete `elastic_drag` path, each NPZ contains:
-
-- `position`: `[T, N, 3]` particle positions.
-- `velocity`: `[T, N, 3]` particle velocities.
-- `feats`: `[N, C]` raw per-particle features. The `elastic_drag` transform produces the active per-particle feature channel used by the model.
-- `box`: `[M, 3]` obstacle or boundary points.
-- `box_feats`: `[M, Cb]` obstacle features, commonly boundary normals. The model infers `Cb` from the data.
-- `neighbors_index`: `[E]` CSR topology-neighbor indices.
-- `neighbors_row_splits`: `[N + 1]` CSR row splits delimiting the topology neighbors of every particle.
-- `force`: `[T, N, 3]` external force applied during physics integration.
-
-`elastic_drag` belongs to the obstacle, topology-enabled, and force-trajectory data groups in `TrajDataset.py`. Providing all arrays above exercises the complete local-feature path: fluid-fluid continuous convolution, fluid-obstacle continuous convolution, topology convolution, and force-aware integration. The topology graph and obstacle tensors are static for a sample, while position, velocity, and force are indexed by frame.
-
-Other NPZ data types may omit `box`/`box_feats`, topology arrays, or `force` when their data-group rules do not use them. The checked-in `config.yaml` currently uses `fancy_fluid`; change its `data` field and data root when running the `elastic_drag` example.
-
-`frame_start` and `frame_end` select the frame window loaded from NPZ particle datasets.
-
-### Trajectory Data
-
-Set `data: trajectory` for PDB-backed trajectories:
-
-```text
-DATA_ROOT/
-  sample_001/
-    sample_001.pdb
-    sample_001.npz
-```
-
-The NPZ contains `position` and `velocity`. Particle mass and element-index features are derived from the PDB topology. The trajectory loader first applies the configured `frame_start:frame_end` window; inference then applies `--start` and `--end` relative to that window.
-
-### Raw Fluid Msgpack Data
-
-Set `data: fluid` to load compressed msgpack frames:
-
-```text
-DATA_ROOT/
-  train/
-    sample_00100.msgpack.zst
-    ...
-    sample_00115.msgpack.zst
-```
-
-The `--sample` argument is a filename prefix. For example, `--sample sample_001` loads files `sample_00100.msgpack.zst` through `sample_00115.msgpack.zst`. The `train/` directory name is retained for compatibility with the raw fluid data layout.
-
-## Model Path
-
-One model step performs:
-
-1. Physics integration using `gravity`, `timestep`, and an optional external force.
-2. Batched radius searches and continuous convolutions for local particle, obstacle, and optional topology features.
-3. Iterative super-particle construction with `k_partite_soft_matching`.
-4. Particle-to-super-particle decoding with RoPE attention.
-5. Position and, when `velhead: true`, velocity corrections.
-
-The token merge path uses the `k`-partite implementation.
-
-For multi-item batches, radius-search row splits prevent cross-sample neighbors. Tokenization applies the same single-item merge path to every batch item and concatenates the results, preserving the token count and ordering used by batch size one.
-
-With `k_partite: k`, each merge iteration reduces the token count to approximately `floor(N / k)`. Choose `slot_attn_iters` so that the particle count remains nonzero through every iteration.
-
-## Configuration
-
-### Runtime And Data
-
-| Parameter | Meaning |
-| --- | --- |
-| `device` | Preferred inference device. |
-| `data` | Loader and model data type. The checked-in config uses `fancy_fluid`. |
-| `frame_start`, `frame_end` | Frame window for NPZ particle datasets. |
-
-### Physics And Local Features
-
-| Parameter | Meaning |
-| --- | --- |
-| `gravity` | Constant acceleration vector. |
-| `timestep` | Integration time step. |
-| `particle_radius` | Base particle radius. |
-| `radius_scale` | Multiplier used to derive neighbor-search filter extents. |
-| `kernel_size` | Continuous-convolution kernel resolution. |
-| `cconv_embedding_dim` | Per-branch local feature dimension. |
-| `use_topology_conv` | `null` uses the built-in data-type rule; a boolean overrides it. |
-| `topology_search_radius` | `null` uses the data-type default; a number overrides it. |
-| `topology_blend_alpha` | When topology is enabled, `null` concatenates fluid and topology branches, `0` is topology-only, and `1` is fluid-only. |
-
-`coordinate_mapping`, `interpolation`, and `use_window` exist in `config.yaml`, but the `TrajectoryModel` wrapper does not forward them into the model constructor. The active path therefore uses the model defaults: `ball_to_cube_volume_preserving`, `linear`, and `true`.
-
-### Tokenizer And Decoder
-
-| Parameter | Meaning |
-| --- | --- |
-| `slot_compression_ratio` | Legacy constructor value; it does not determine the current token count. |
-| `slot_attn_iters` | Number of iterative `k`-partite merge layers. |
-| `slot_attn_heads` | Attention heads in each token merge layer. |
-| `k_partite` | Merge partition factor; must be at least `2`. |
-| `particle_position_rope_dim` | 3D RoPE dimension; must be divisible by `6`. |
-| `num_decoder_layers` | Number of super-particle decoder layers. |
-| `decoder_attn_heads` | Decoder attention heads. |
-| `decoder_attn_ffn_hidden_dim` | Decoder FFN hidden dimension. |
-| `decoder_attn_dropout` | Decoder attention and FFN dropout. The tokenizer currently uses its constructor default of `0.1`. |
-| `output_hidden_dim` | Output MLP hidden dimension. |
-| `output_layers` | Output MLP depth. |
-| `velhead` | Enables separate learned position and velocity corrections. |
-| `verbose` | Enables timing diagnostics and debugger breaks inside the model. Keep this `false` for normal runs. |
-
-The combined feature dimension is `3 * cconv_embedding_dim` for obstacle data and `local_fluid`, and `2 * cconv_embedding_dim` for other no-obstacle data. It must be divisible by both `slot_attn_heads` and `decoder_attn_heads`. The current implementation also enforces:
-
-```text
-particle_position_rope_dim % 6 == 0
-particle_position_rope_dim <= 3 * cconv_embedding_dim / decoder_attn_heads
-```
-
-## Inference
-
-`inference.bash` is a batch launcher template. Set `DATA_DIR`, `FOLD_DIR`, the actual checkpoint filename, rollout bounds, and sample names. Point `CHECKPOINT` to an existing checkpoint and use its accompanying configuration.
-
-Equivalent direct command:
+本分支只包含源码、配置和必要说明，**不包含权重、训练数据、运行日志、视频或实验报告**。因此，下列命令需要本地准备相应权重和资产，不能仅凭克隆源码复现已有检查点。
 
 ```bash
-ATTN_IMPL=flash_attn CUDA_VISIBLE_DEVICES=0 python inference.py \
-    --data_dir /path/to/data \
-    --sample 0 \
-    --config /path/to/checkpoints/run_name/config.yaml \
-    --checkpoint /path/to/checkpoints/run_name/final.ckpt \
-    --num_steps 199 \
-    --dt 1 \
-    --output_dir /path/to/checkpoints/run_name \
-    --start 0 \
-    --end 200
+# 默认从接近抓取的位置开始，h=1/600；GPU 网络与物理更新
+python scripts/run_franka_soft_grasp.py --device cuda:0 \
+  --checkpoint /path/to/checkpoint.pt --window --output /path/to/new_run
+
+# CPU 运行
+python scripts/run_franka_soft_grasp.py --device cpu \
+  --checkpoint /path/to/checkpoint.pt --window --output /path/to/new_cpu_run
+
+# 完整命令时间线入口；完整接近动作的长程质量仍待验证
+python scripts/run_franka_soft_grasp.py --device cuda:0 \
+  --checkpoint /path/to/checkpoint.pt --start-time 0 --frames 240 \
+  --output /path/to/full_timeline
+
+# 资产 JSON + 共享权重的原生窗口
+python scripts/run_native_asset_live.py --device cuda:0 \
+  --checkpoint /path/to/checkpoint.pt --asset assets/live/native_five_families.json
 ```
 
-After editing the launcher, run it from the repository root:
+训练入口要求已经通过资格检查的数据清单和初始化权重：
 
 ```bash
-bash inference.bash
+python scripts/prepare_franka_mixed_course.py \
+  --base-manifest /path/to/qualified_base_manifest.json \
+  --parent /path/to/parent_checkpoint.pt \
+  --dataset /path/to/qualified_franka_data.npz --output /path/to/new_course
+python scripts/run_franka_mixed_course.py --plan /path/to/new_course/launch_plan.json
 ```
 
-Important inference behavior:
+## 环境与外部源码
 
-- The initial position and velocity come from frame `start` of the loaded `[start:end]` slice.
-- `num_steps` controls the number of autoregressive predictions and may exceed the available ground-truth length.
-- The model integration step comes from `config.yaml:timestep`. The `--dt` argument samples both predictions and ground truth when computing metrics and is used in XTC output naming; it does not override the model timestep.
-- Feature channel counts are inferred from the loaded sample before model construction.
-- `trajectory` data additionally writes an XTC trajectory using the PDB topology.
+当前实测环境为 Python 3.12、PyTorch 2.7.1+cu128、Warp 1.17.0、NumPy 1.26.4、trimesh 5.1.1。Newton 固定在 `25298aea1691e060c86f95e8d2b773c898c006d3`，不在本仓库中。
 
-Predicted NPZ files are written to:
+现有研究脚本默认使用 `/home/oem/code/engine/newton`，部分资产工具也引用该 Newton 环境；迁移机器时需要调整这些路径。`environment.yaml` 对应原 WorldParticle，不是新共享求解器的完整环境锁。资产读取补充依赖可安装：
 
-```text
-OUTPUT_DIR/outcomes/npz/<sample>/<sample>_<START>_<END>.npz
+```bash
+python -m pip install -r requirements-vbd-assets.txt
 ```
 
-They contain:
+## 当前结果和限制
 
-- `position`: predicted positions with the initial frame first.
-- `velocity`: predicted velocities with the initial frame first.
+- 当前纯 VBD 范围为 **42 个官方 demo**，其余 **9 个外部求解器耦合场景**暂时排除；清单见 `configs/pure_vbd_demo_scope.json`。
+- 2478 检查点在自建低分辨率软块场景中，从独立、无初始接触的接近抓取位置开始，用 GPU 推理抬升约 **9.9 cm** 并保持 **0.5 s**。这不是完整官方 Franka demo 的验收。
+- 同配置下，`h=1/600` 能抓起，`h=1/60` 未抓起。1.95 s 物理过程原耗时约 978 s，**尚不具备实时速度**。
+- 新课程保留 69 组旧数据并加入 1 组 Franka 数据，已完成 **156 次**更新，70 组数据均获得实际参数更新；新增 Franka 获得 18 次更新。记录中 155 次具有正梯度并改变了跟踪参数标量，1 次为零梯度。用户要求暂停时，最终开发集复测尚未完成，未产生合格的新导出权重。
+- Franka 固定窗口 loss：`0.03910 → 0.03944 → 0.03988`，目前**没有证据表明这轮扩训改善或收敛**。短窗口检查不代替完整轨迹、材料泛化或视觉验收。
+- 最新静态拓扑缓存已通过 CPU 正向、反向和失效条件对照；CUDA Graph、BF16 及精简数值诊断是实验性推理选项，GPU 等价性、速度和完整轨迹尚待验证，默认保留 FP32。
+- 关节—材料运动粗空间的当前 Franka 路径要求每个交互分量只有一个材料对象；不能据此宣称已支持机器人同时抓取任意多个软体、布料和 cable。
 
-When ground truth is available, inference also prints position and velocity MSE for the overlapping frames.
+不要把本分支视为已完成所有 demo 替代、完全无穿透或实时性能认证的发行版。

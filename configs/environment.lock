@@ -1,0 +1,215 @@
+{
+  "format": "P0 environment evidence, not an installer lockfile",
+  "plan": {
+    "path": "docs/plans/WorldParticle_VBD_Replacement_Plan_v4.1.md",
+    "sha256": "5cf8bef85aea83c2132d2d58a3cbe5635e330a21a697566bed98d4e791782aa0"
+  },
+  "sources": {
+    "worldparticle": {
+      "root": "/home/oem/code/worldparticle",
+      "head": "b8e37b854f2af3fc9bfd7fc150cfc01cba4a092e",
+      "tracked_diff": "",
+      "files": {
+        "trajectory_model.py": "b4201f08933c74310cc2a64a77cfec71b7c162f7d6b66eb91710845df52158c7",
+        "TrajDataset.py": "b4469f360486611874188d1fd78b902fb1d678760df1143a8ef6da01d068085c",
+        "config.yaml": "8e41aad7474a7ec9a36ed096052f5b6cec0772ec53a5d8379627c6010e3b16ca",
+        "LICENSE": "ecbc77ffbddca02c2526acabc0738e2a7a1f65005975e379c1eb1801a6abddc1",
+        "models/particle_network_cross_attn_feat.py": "acb65d5a36a26addcf3b1cc7368665d970ec90ae0799988145435f1391035c50",
+        "models/cross_attn_feat.py": "60f1cd9b755c08f64cb2d67ea326b60a3ac8f5a4cb940a7dd2c12ce15840ab85",
+        "models/super_particle_layers.py": "126dfdb567b9da5711f221931b0a8dee0859b47fe562b8803a6fcad272b5a675",
+        "models/layers/attention.py": "feb20a84177a9448c0e8abb24aef806ef3f6de569d74808a9c63b495eebc95c7",
+        "models/layers/merge.py": "e01542cd0fee2c7c6e44ea21ad2beaa9860549acffc6f3a3ff84e6d6e4df20dc"
+      }
+    },
+    "newton": {
+      "root": "/home/oem/code/engine/newton",
+      "head": "25298aea1691e060c86f95e8d2b773c898c006d3",
+      "tracked_diff": "",
+      "files": {
+        "pyproject.toml": "6f9ba3154efd876fecad4c50a9db500fefca764019d96dd6c077ecae65a67ad8",
+        "LICENSE.md": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+        "newton/_src/sim/builder.py": "b26691a072a00547c1473ff56322f1b9fc73fa59eef60b12c673a7fb91ea04e0",
+        "newton/_src/sim/state.py": "4d43c85a80f71247c757e12ab79d752d7579165b6786e983cf7f134a83128a5e",
+        "newton/_src/sim/collide.py": "844d0c765977b3e4363986116af53a9931790bc82a6277512cb93f41e4a9861e",
+        "newton/_src/geometry/narrow_phase.py": "de9c14c379c60be956ce16314a6c8b4c785622ac4374ed4b0fac9cbd12d65cb0",
+        "newton/_src/solvers/vbd/solver_vbd.py": "3d54bc3334c063023f1937065b5e5ad2ee250eede67823d60d528ef0cb82b77d",
+        "newton/_src/solvers/vbd/particle_vbd_kernels.py": "ced5c4110b9676c51ea14d2a51ce8350ad26b00f46992cbacc0bc60afd26c282",
+        "newton/_src/solvers/vbd/rigid_vbd_kernels.py": "61b9c28f001c2a368a9c6cde71472ad486a1327b047cd95b2ca792a35af92816",
+        "newton/_src/solvers/vbd/tri_mesh_collision.py": "92755e4b9dc62acd70d80e15b9ca514cb88541187f9138f4e0d18baf2a8fbdb6",
+        "newton/_src/solvers/vbd/interval_arithmetic.py": "784e48c98d3b75bf48d28e5d531e4d2ac590fa5377e192a39ae9a694643ba1a7",
+        "newton/tests/test_solver_vbd.py": "b8b550aed9f704e9c149997a91dd612bacf93c0f9eb87d852745297dcfb9a974"
+      }
+    }
+  },
+  "runtimes": {
+    "worldparticle": {
+      "name": "worldparticle",
+      "python": "3.12.13 (main, May 10 2026, 19:30:01) [Clang 22.1.3 ]",
+      "executable": "/home/oem/code/worldparticle/.venv/bin/python",
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+      "packages": {
+        "newton": null,
+        "warp-lang": {
+          "version": "1.17.0",
+          "direct_url": null,
+          "distribution_record_sha256": "5e9c463e33869cf395dd9d08793bfa2eb0bb531d2d229b11d7490974e940a9ee",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "torch": {
+          "version": "2.7.1+cu128",
+          "direct_url": null,
+          "distribution_record_sha256": "82284052217ceb1988bd8566e5c59f70da9480ffb846cdb194b274ffd50a357f",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "open3d": {
+          "version": "0.19.0+1e7b174",
+          "direct_url": "{\"url\":\"file:///home/oem/code/worldparticle/.local/wheels/open3d-0.19.0+1e7b174-cp312-cp312-manylinux_2_35_x86_64.whl\",\"archive_info\":{}}",
+          "distribution_record_sha256": "7659e6fd6e13e786d50a2b721d86814f7407dac17f3a9f06d5154030d2fbc6a4",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "flash-attn": {
+          "version": "2.8.3",
+          "direct_url": "{\"url\":\"https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3%2Bcu12torch2.7cxx11abiTRUE-cp312-cp312-linux_x86_64.whl\",\"archive_info\":{}}",
+          "distribution_record_sha256": "36d6de51f9ed2d7fa11a2f32d1bd047e4662d6aaaa79b9519d2f0730fe37a379",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "numpy": {
+          "version": "1.26.4",
+          "direct_url": null,
+          "distribution_record_sha256": "b06f99d381b4a397c64820f4dadbf9339ad9aa0a878f9f45466106298e1e45c7",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "pytorch-lightning": {
+          "version": "2.0.2",
+          "direct_url": null,
+          "distribution_record_sha256": "ad230ffb8c856b19cd431d1866e590b5f963417b9f08cb68c0b9236b05dc7584",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        }
+      },
+      "imports": {
+        "torch": {
+          "status": "PASS",
+          "file": "/home/oem/code/worldparticle/.venv/lib/python3.12/site-packages/torch/__init__.py",
+          "version": "2.7.1+cu128",
+          "cuda_build": "12.8",
+          "cuda_available": true,
+          "upstream_commit": "e2d141dbde55c2a4370fac5165b0561b6af4798b",
+          "gpu_name": "NVIDIA GeForce RTX 5090 D v2"
+        },
+        "open3d": {
+          "status": "PASS",
+          "file": "/home/oem/code/worldparticle/.venv/lib/python3.12/site-packages/open3d/__init__.py",
+          "version": "0.19.0+1e7b174",
+          "torch_radius_search_available": true
+        },
+        "flash_attn": {
+          "status": "PASS",
+          "file": "/home/oem/code/worldparticle/.venv/lib/python3.12/site-packages/flash_attn/__init__.py",
+          "version": "2.8.3"
+        },
+        "warp": {
+          "status": "PASS",
+          "file": "/home/oem/code/worldparticle/.venv/lib/python3.12/site-packages/warp/__init__.py",
+          "version": "1.17.0",
+          "devices": [
+            "cpu",
+            "cuda:0"
+          ]
+        }
+      }
+    },
+    "reference": {
+      "name": "reference",
+      "python": "3.12.13 (main, May 10 2026, 19:30:01) [Clang 22.1.3 ]",
+      "executable": "/home/oem/code/engine/newton/.venv/bin/python3",
+      "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+      "packages": {
+        "newton": {
+          "version": "1.7.0.dev0",
+          "direct_url": "{\"url\":\"file:///home/oem/code/engine/newton\",\"dir_info\":{\"editable\":true}}",
+          "distribution_record_sha256": "09f50afa177926e60c294f4d6561e525bdf67c5315763bb99b18173278e4c3b6",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "warp-lang": {
+          "version": "1.17.0",
+          "direct_url": null,
+          "distribution_record_sha256": "5e9c463e33869cf395dd9d08793bfa2eb0bb531d2d229b11d7490974e940a9ee",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "torch": null,
+        "open3d": {
+          "version": "0.19.0",
+          "direct_url": null,
+          "distribution_record_sha256": "60485d0dda50ec5a0d9507311825cbff0df7c9f86f12e809f3436547c4b304a4",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "flash-attn": null,
+        "numpy": {
+          "version": "2.5.0",
+          "direct_url": null,
+          "distribution_record_sha256": "9ecd95411665ff87b842e444a18d271e79493bdf9c85f49c10a4eadb81c25096",
+          "upstream_commit": null,
+          "commit_note": "Wheel metadata does not supply an upstream commit; version and distribution record are captured."
+        },
+        "pytorch-lightning": null
+      },
+      "imports": {
+        "warp": {
+          "status": "PASS",
+          "file": "/home/oem/code/engine/newton/.venv/lib/python3.12/site-packages/warp/__init__.py",
+          "version": "1.17.0",
+          "devices": [
+            "cpu",
+            "cuda:0"
+          ]
+        },
+        "newton": {
+          "status": "PASS",
+          "file": "/home/oem/code/engine/newton/newton/__init__.py",
+          "version": "1.7.0.dev0"
+        }
+      }
+    }
+  },
+  "gpu": {
+    "command": [
+      "nvidia-smi",
+      "--query-gpu=name,uuid,memory.total,driver_version",
+      "--format=csv,noheader"
+    ],
+    "returncode": 0,
+    "stdout": "NVIDIA GeForce RTX 5090 D v2, GPU-f7617629-1ed3-2dea-1382-897940eaf2bc, 24455 MiB, 595.71.05",
+    "stderr": ""
+  },
+  "nvcc": {
+    "command": [
+      "/usr/local/cuda/bin/nvcc",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Fri_Feb_21_20:23:50_PST_2025\nCuda compilation tools, release 12.8, V12.8.93\nBuild cuda_12.8.r12.8/compiler.35583870_0",
+    "stderr": ""
+  },
+  "release_source_mapping": {
+    "warp": {
+      "version": "1.17.0",
+      "tag": "v1.17.0",
+      "tag_commit": "f4c57f26f1e3936a89afd283e39fcabf6d548dc7",
+      "evidence": "git ls-remote https://github.com/NVIDIA/warp.git refs/tags/v1.17.0 refs/tags/v1.17.0^{}",
+      "wheel_build_commit_verified": false
+    }
+  },
+  "limitations": [
+    "Wheel upstream commits and archive hashes are unavailable unless explicitly present in distribution metadata.",
+    "Original WorldParticle environment.yaml is a declared environment; captured runtimes are the actual environments used."
+  ]
+}

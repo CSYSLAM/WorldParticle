@@ -1,0 +1,16 @@
+{
+  "demo": "vbd.example_cable_bend_twist_analytic",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "frames": 390,
+  "budgets": [128, 256],
+  "data_dir": ".local/refined_analytic_v20",
+  "report_dir": "reports/refined_analytic_v20",
+  "position_refinement_limit_over_L": 0.002,
+  "orientation_refinement_limit_rad": 0.002,
+  "episodes": [
+    {"name": "train", "factor": 1.0, "split": "train", "existing": {"128": ".local/refined_analytic_v16/analytic_cpu128_full.npz", "256": ".local/refined_analytic_v16/analytic_cpu256_full.npz"}},
+    {"name": "train_extra", "factor": 1.25, "split": "train"},
+    {"name": "validation", "factor": 0.85, "split": "validation"}
+  ],
+  "scope": "Full same-h analytic rod episodes, independently qualified before v20 optimization. Previous observed baseline task is development, not a blind test. Numerical dual differences remain reported separately."
+}

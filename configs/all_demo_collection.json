@@ -1,0 +1,12 @@
+{
+  "scope": "All 51 pinned VBD demos: physical-call data preparation only",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "frames_per_demo": 120,
+  "worker_timeout_seconds": 1800,
+  "maximum_pipeline_seconds": 7200,
+  "maximum_output_gib": 20,
+  "output": ".local/official_substeps_v1",
+  "reports": "reports/official_substeps/full",
+  "serial_gpu_workers": true,
+  "automatic_training_admission": false
+}

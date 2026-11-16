@@ -1,0 +1,19 @@
+{
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "report_dir": "reports/shared_multitype_reference_v20",
+  "data_dir": ".local/shared_multitype_reference_v20",
+  "position_refinement_limit_over_L": 0.002,
+  "orientation_refinement_limit_rad": 0.002,
+  "scope": "Complete fixed-h material episodes for preliminary training. No automatic admission and no all-demo or continuum certification. Failed budgets are retained, never silently replaced.",
+  "families": [
+    {"name": "softbody", "demo": "softbody.example_softbody_hanging", "frames": 120, "budgets": [256, 512]},
+    {"name": "cloth", "demo": "vbd.example_cloth_stiff_material_hanging", "frames": 120, "budgets": [1024, 2048]},
+    {"name": "rigid", "demo": "basic.example_basic_dzhanibekov", "frames": 480, "budgets": [4, 8]}
+  ],
+  "episodes": [
+    {"name": "train", "factor": 1.0, "split": "train"},
+    {"name": "train_extra", "factor": 1.25, "split": "train"},
+    {"name": "validation", "factor": 1.15, "split": "validation"}
+  ],
+  "test_policy": "No new material test is evaluated or selected by this reference preparation. Existing observed materials remain development. Freeze a fresh test separately before model optimization."
+}

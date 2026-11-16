@@ -1,0 +1,39 @@
+{
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "status": "SOURCE_AUDITED_RUNTIME_PARTIAL",
+  "scope_rule": "Only fixed SolverVBD behavior is included; source support and runtime validation are separate.",
+  "representation": {
+    "solver_coordinates": "maximal body pose and world COM twist",
+    "anchors": "joint_X_p/joint_X_c in body-local frames",
+    "axes": "authored joint-local axes; ROD anchor +Z is material tangent",
+    "structural_rest": "non-ROD uses initial model.body_q; drive/limit rest offsets capture model.joint_q",
+    "constraint_model": "default finite-material compliant ALM; not ideal hard constraints",
+    "source": "newton/_src/solvers/vbd/solver_vbd.py:SolverVBD"
+  },
+  "types": [
+    {"type": "BALL", "source_support": "SUPPORTED", "relative_dofs": 3, "structural_response": "translational compliance", "drive": "OUT_OF_SCOPE", "limits": "OUT_OF_SCOPE", "runtime_evidence": "basic.example_basic_joints", "network": "NOT_IMPLEMENTED"},
+    {"type": "FIXED", "source_support": "SUPPORTED", "relative_dofs": 0, "structural_response": "translational and angular compliance", "drive": "OUT_OF_SCOPE", "limits": "OUT_OF_SCOPE", "runtime_evidence": "basic.example_basic_joints", "network": "NOT_IMPLEMENTED"},
+    {"type": "FREE", "source_support": "SUPPORTED", "relative_dofs": 6, "structural_response": "no structural constraint", "drive": "OUT_OF_SCOPE", "limits": "OUT_OF_SCOPE", "runtime_evidence": "vbd.example_vbd_rigid_rigid_contact", "network": "NOT_IMPLEMENTED"},
+    {"type": "REVOLUTE", "source_support": "SUPPORTED", "relative_dofs": 1, "structural_response": "translation and locked angular directions are compliant", "drive": "SUPPORTED", "limits": "SUPPORTED", "angular_history": "unwrapped angle, relative per-step rotation < pi including prediction and corrections", "runtime_evidence": "basic.example_basic_joints; multiturn drive/limit tests remain to run", "network": "NOT_IMPLEMENTED"},
+    {"type": "PRISMATIC", "source_support": "SUPPORTED", "relative_dofs": 1, "structural_response": "locked translation and angular directions are compliant", "drive": "SUPPORTED", "limits": "SUPPORTED", "runtime_evidence": "basic.example_basic_joints", "network": "NOT_IMPLEMENTED"},
+    {"type": "D6", "source_support": "SUPPORTED", "relative_dofs": "authored linear/angular axis count, at most six", "structural_response": "remaining locked directions are compliant", "drive": "SUPPORTED", "limits": "SUPPORTED", "angular_history": "winding only when exactly one angular DOF; relative per-step rotation < pi", "runtime_evidence": "UNKNOWN", "network": "NOT_IMPLEMENTED"},
+    {"type": "ROD", "source_support": "SUPPORTED", "relative_dofs": 6, "coordinates": 7, "structural_response": "stretch, shear, bend, twist", "drive": "target_ke/target_kd define material; target_q captures structural rest bend/twist", "limits": "OUT_OF_SCOPE", "feedforward": "six-component world-frame wrench", "runtime_evidence": "vbd.example_cable_bend_stiffness; stretch/shear/twist curves remain to run", "network": "NOT_IMPLEMENTED"},
+    {"type": "DISTANCE", "source_support": "OUT_OF_SCOPE", "reason": "SolverVBD explicitly does not support DISTANCE"}
+  ],
+  "behaviors": {
+    "joint_enabled": "SUPPORTED, read live; notify JOINT_PROPERTIES to refresh derived conditioning",
+    "drive_damping": "absolute physical damping, not normalized damping ratio",
+    "joint_f": "SUPPORTED",
+    "joint_owned_mimic": {"source_support": "SUPPORTED for PRISMATIC/REVOLUTE/D6", "runtime": "UNKNOWN", "source": "newton/_src/solvers/vbd/solver_vbd.py imports/uses joint_mimic and project_joint_mimics"},
+    "deprecated_sparse_mimic": "OUT_OF_SCOPE",
+    "equality_constraints": "OUT_OF_SCOPE",
+    "joint_armature": "OUT_OF_SCOPE",
+    "joint_friction": "OUT_OF_SCOPE",
+    "joint_effort_limit": "OUT_OF_SCOPE",
+    "joint_velocity_limit": "OUT_OF_SCOPE",
+    "joint_target_mode": "OUT_OF_SCOPE",
+    "closed_chains": {"source_support": "UNKNOWN pending explicit supported-connection audit", "runtime": "UNKNOWN"},
+    "particle_body_attachment": {"source_support": "SUPPORTED, translational compliant penalty, both ends integrated by VBD", "runtime": "UNKNOWN", "network": "NOT_IMPLEMENTED"}
+  },
+  "validation_policy": "runtime_evidence names an entry point, not a PASS. Actual results are in reports/p0_reference/summary.json; per-feature physics, limits, drives, winding and restarts remain P1/P2/P7 checks."
+}

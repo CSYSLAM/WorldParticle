@@ -1,0 +1,536 @@
+{
+  "config": {
+    "name": "mixed_response_frozen_test",
+    "seed": 20261030,
+    "newton_root": "/home/oem/code/engine/newton",
+    "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+    "asset": "assets/live/mixed_response.json",
+    "contract": "finite_elastic_plane_ipc_v1",
+    "dt": 0.008333333333333333,
+    "steps": 240,
+    "teacher_iterations": 64,
+    "convergence_iterations": 128,
+    "convergence_tolerance_over_L": 0.002,
+    "data_dir": ".local/mixed_response_v1/frozen_test",
+    "report_dir": "reports/mixed_response_v1/frozen_test",
+    "checkpoint_dir": "checkpoints/mixed_response_v1",
+    "model": {
+      "width": 64,
+      "rank": 2,
+      "unroll": 4,
+      "relaxation": 0.8,
+      "trust_radius": 0.1,
+      "response_gain": 1.0,
+      "line_search": [
+        1.0,
+        0.5,
+        0.25,
+        0.125,
+        0.0625
+      ],
+      "root_tolerance": [
+        5e-07,
+        2e-06
+      ]
+    },
+    "training": {
+      "steps": 1600,
+      "batch_size": 8,
+      "horizon": 4,
+      "learning_rate": 0.0003,
+      "validation_interval": 100,
+      "validation_steps": 48,
+      "gradient_clip": 1.0,
+      "max_seconds": 1500
+    },
+    "scope": {
+      "coupling": "joint/rod internal; objects contact the static plane independently",
+      "self_contact": false,
+      "default_alm_semantics": false
+    },
+    "fixed_split": "test"
+  },
+  "specs": [
+    {
+      "name": "Mixed shared response model",
+      "family": "mixed",
+      "gravity": [
+        0,
+        0,
+        -4.8
+      ],
+      "dt": 0.008333333333333333,
+      "steps": 240,
+      "objects": [
+        {
+          "name": "joint",
+          "family": "joint",
+          "geometry": {
+            "type": "hinged_bar",
+            "half_extents": [
+              0.12,
+              0.025,
+              0.025
+            ],
+            "axis": [
+              0,
+              1,
+              0
+            ]
+          },
+          "material": {
+            "mass": 0.45,
+            "linear_ke": 20000.0,
+            "angular_ke": 2000.0,
+            "damping": 0.0
+          },
+          "position": [
+            -0.7,
+            -0.4,
+            0.13
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "friction": 0.4
+        },
+        {
+          "name": "free_box",
+          "family": "rigid",
+          "geometry": {
+            "type": "box",
+            "half_extents": [
+              0.08,
+              0.06,
+              0.05
+            ]
+          },
+          "position": [
+            -0.7,
+            0.05,
+            0.25
+          ],
+          "velocity": [
+            0.45,
+            0,
+            0
+          ],
+          "material": {
+            "mass": 0.5,
+            "damping": 0
+          },
+          "friction": 0.4
+        },
+        {
+          "name": "softbody",
+          "family": "softbody",
+          "geometry": {
+            "type": "tet_grid",
+            "resolution": [
+              2,
+              1,
+              1
+            ],
+            "size": [
+              0.24,
+              0.12,
+              0.12
+            ]
+          },
+          "material": {
+            "mu": 16800.0,
+            "lmbd": 25200.0,
+            "density": 800.0,
+            "damping": 0.0
+          },
+          "pins": {
+            "indices": []
+          },
+          "position": [
+            -0.15,
+            -0.4,
+            0.1
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "velocity": [
+            0.25,
+            0,
+            0
+          ],
+          "friction": 0.4
+        },
+        {
+          "name": "cloth",
+          "family": "cloth",
+          "geometry": {
+            "type": "obj",
+            "path": "cloth_patch.obj"
+          },
+          "material": {
+            "mu": 77.0,
+            "lmbd": 115.49999999999999,
+            "mass": 0.03,
+            "bending": 0.027999999999999997,
+            "damping": 0.0
+          },
+          "pins": {
+            "axis": "x",
+            "side": "min"
+          },
+          "position": [
+            0.5,
+            -0.4,
+            0.16
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "velocity": [
+            0.25,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0.17364817766693033,
+            0,
+            0.984807753012208
+          ],
+          "friction": 0.4
+        },
+        {
+          "name": "rod",
+          "family": "rod",
+          "geometry": {
+            "type": "rod",
+            "points": [
+              [
+                0.0,
+                0,
+                0
+              ],
+              [
+                0.1,
+                0,
+                0
+              ],
+              [
+                0.2,
+                0,
+                0
+              ],
+              [
+                0.30000000000000004,
+                0,
+                0
+              ],
+              [
+                0.4,
+                0,
+                0
+              ]
+            ],
+            "radius": 0.015
+          },
+          "material": {
+            "stretch": 2000.0,
+            "shear": 1400.0,
+            "bending": 0.32000000000000006,
+            "twist": 0.22400000000000003,
+            "density": 1000.0,
+            "damping": 0.0
+          },
+          "fixed_segments": [
+            0
+          ],
+          "position": [
+            -0.4,
+            0.5,
+            0.035
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "friction": 0.4
+        }
+      ],
+      "contacts": "plane",
+      "plane": {
+        "height": 0,
+        "activation_radius": 0.01,
+        "rigid_margin": 0.01,
+        "particle_mu": 0.4,
+        "ground_mu": 0.0,
+        "ke": 5000,
+        "kd": 0,
+        "friction_epsilon": 0.01
+      },
+      "contract": "finite_elastic_plane_ipc_v1",
+      "_directory": "/home/oem/code/worldparticle/assets/live",
+      "_asset_file": "/home/oem/code/worldparticle/assets/live/mixed_response.json"
+    },
+    {
+      "name": "Mixed shared response model",
+      "family": "mixed",
+      "gravity": [
+        0,
+        0,
+        -4.8
+      ],
+      "dt": 0.008333333333333333,
+      "steps": 240,
+      "objects": [
+        {
+          "name": "joint",
+          "family": "joint",
+          "geometry": {
+            "type": "hinged_bar",
+            "half_extents": [
+              0.12,
+              0.025,
+              0.025
+            ],
+            "axis": [
+              0,
+              1,
+              0
+            ]
+          },
+          "material": {
+            "mass": 0.45,
+            "linear_ke": 20000.0,
+            "angular_ke": 2000.0,
+            "damping": 0.0
+          },
+          "position": [
+            -0.7,
+            -0.4,
+            0.13
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "friction": 0.4
+        },
+        {
+          "name": "free_box",
+          "family": "rigid",
+          "geometry": {
+            "type": "box",
+            "half_extents": [
+              0.08,
+              0.06,
+              0.05
+            ]
+          },
+          "position": [
+            -0.7,
+            0.05,
+            0.25
+          ],
+          "velocity": [
+            0.45,
+            0,
+            0
+          ],
+          "material": {
+            "mass": 0.5,
+            "damping": 0
+          },
+          "friction": 0.4
+        },
+        {
+          "name": "softbody",
+          "family": "softbody",
+          "geometry": {
+            "type": "tet_grid",
+            "resolution": [
+              2,
+              1,
+              1
+            ],
+            "size": [
+              0.24,
+              0.12,
+              0.12
+            ]
+          },
+          "material": {
+            "mu": 16800.0,
+            "lmbd": 25200.0,
+            "density": 800.0,
+            "damping": 0.0
+          },
+          "pins": {
+            "indices": []
+          },
+          "position": [
+            -0.15,
+            -0.4,
+            0.1
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "velocity": [
+            0.25,
+            0,
+            0
+          ],
+          "friction": 0.4
+        },
+        {
+          "name": "cloth",
+          "family": "cloth",
+          "geometry": {
+            "type": "obj",
+            "path": "cloth_patch.obj"
+          },
+          "material": {
+            "mu": 77.0,
+            "lmbd": 115.49999999999999,
+            "mass": 0.03,
+            "bending": 0.027999999999999997,
+            "damping": 0.0
+          },
+          "pins": {
+            "axis": "x",
+            "side": "min"
+          },
+          "position": [
+            0.5,
+            -0.4,
+            0.16
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "velocity": [
+            0.25,
+            0,
+            0
+          ],
+          "rotation_xyzw": [
+            0,
+            0.17364817766693033,
+            0,
+            0.984807753012208
+          ],
+          "friction": 0.4
+        },
+        {
+          "name": "rod",
+          "family": "rod",
+          "geometry": {
+            "type": "rod",
+            "points": [
+              [
+                0.0,
+                0,
+                0
+              ],
+              [
+                0.1,
+                0,
+                0
+              ],
+              [
+                0.2,
+                0,
+                0
+              ],
+              [
+                0.30000000000000004,
+                0,
+                0
+              ],
+              [
+                0.4,
+                0,
+                0
+              ]
+            ],
+            "radius": 0.015
+          },
+          "material": {
+            "stretch": 2000.0,
+            "shear": 1400.0,
+            "bending": 0.32000000000000006,
+            "twist": 0.22400000000000003,
+            "density": 1000.0,
+            "damping": 0.0
+          },
+          "fixed_segments": [
+            0
+          ],
+          "position": [
+            -0.4,
+            0.5,
+            0.035
+          ],
+          "gravity": [
+            0,
+            0,
+            -4.8
+          ],
+          "dt": 0.008333333333333333,
+          "reference_length": 0.4,
+          "contacts": false,
+          "friction": 0.4
+        }
+      ],
+      "contacts": "plane",
+      "plane": {
+        "height": 0,
+        "activation_radius": 0.01,
+        "rigid_margin": 0.01,
+        "particle_mu": 0.4,
+        "ground_mu": 1.0562500000000001,
+        "ke": 5000,
+        "kd": 0,
+        "friction_epsilon": 0.01
+      },
+      "contract": "finite_elastic_plane_ipc_v1",
+      "_directory": "/home/oem/code/worldparticle/assets/live",
+      "_asset_file": "/home/oem/code/worldparticle/assets/live/mixed_response.json"
+    }
+  ],
+  "purpose": "Freeze before inference inspection. Paired friction with an unseen material combination; no training admission."
+}

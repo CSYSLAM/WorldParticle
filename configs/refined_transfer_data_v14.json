@@ -1,0 +1,18 @@
+{
+  "demo": "vbd.example_cable_twist_transfer",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "frames": 390,
+  "device": "cpu",
+  "budgets": [128, 256],
+  "data_dir": ".local/refined_transfer_v14",
+  "report_dir": "reports/refined_transfer_v14",
+  "position_refinement_limit_over_L": 0.002,
+  "orientation_refinement_limit_rad": 0.002,
+  "episodes": [
+    {"name": "train", "factor": 1.0, "split": "train", "existing": {"128": ".local/rod_boundary_v11/transfer_cpu128_full.npz", "256": ".local/rod_chain_v12/transfer_cpu256_full.npz"}},
+    {"name": "train_extra", "factor": 1.25, "split": "train"},
+    {"name": "validation", "factor": 0.8, "split": "validation"},
+    {"name": "test", "factor": 1.1, "split": "test"}
+  ],
+  "scope": "Predeclared full-duration material episodes and fixed-h refinement pairs. Raw collection and refinement do not automatically authorize training; original checks, operator verification and corpus admission are recorded separately."
+}

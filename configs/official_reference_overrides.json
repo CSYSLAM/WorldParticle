@@ -1,0 +1,13 @@
+{
+  "source_requirement": "newton/pyproject.toml: mujoco-warp~=3.16.0",
+  "base_environment_mujoco": "3.12.0",
+  "base_environment_mujoco_warp": "3.12.0",
+  "overrides": {
+    "mujoco": "3.16.0",
+    "mujoco-warp": "3.16.0"
+  },
+  "target": ".local/official_ref_overrides",
+  "warp": "1.17.0",
+  "base_environment_changed": false,
+  "activation": "Worker-only PYTHONPATH prefix"
+}

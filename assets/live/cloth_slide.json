@@ -1,0 +1,45 @@
+{
+  "name": "Cloth OBJ \u2014 shared model",
+  "family": "cloth",
+  "geometry": {
+    "type": "obj",
+    "path": "cloth_patch.obj"
+  },
+  "material": {
+    "mu": 110.0,
+    "lmbd": 165.0,
+    "mass": 0.03,
+    "bending": 0.04,
+    "damping": 0.0
+  },
+  "pins": {
+    "indices": []
+  },
+  "position": [
+    0,
+    0,
+    0.012
+  ],
+  "gravity": [
+    0,
+    0,
+    -4.8
+  ],
+  "dt": 0.008333333333333333,
+  "reference_length": 0.4,
+  "contacts": "plane",
+  "velocity": [
+    0.5,
+    0,
+    0
+  ],
+  "plane": {
+    "height": 0,
+    "activation_radius": 0.01,
+    "particle_mu": 0.4,
+    "ground_mu": 0.4,
+    "ke": 5000,
+    "kd": 0,
+    "friction_epsilon": 0.01
+  }
+}

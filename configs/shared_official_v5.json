@@ -1,0 +1,67 @@
+{
+  "name": "shared_official_v5",
+  "seed": 20261031,
+  "newton_root": "/home/oem/code/engine/newton",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "asset": "assets/live/mixed_attached.json",
+  "contract": "finite_elastic_plane_attachment_v1",
+  "dt": 0.008333333333333333,
+  "steps": 240,
+  "teacher_iterations": 64,
+  "convergence_iterations": 128,
+  "convergence_tolerance_over_L": 0.002,
+  "data_dir": ".local/official_v5",
+  "report_dir": "reports/official_demos/v5",
+  "checkpoint_dir": "checkpoints/shared_official_v5",
+  "model": {
+    "width": 64,
+    "rank": 2,
+    "unroll": 4,
+    "relaxation": 0.8,
+    "trust_radius": 0.1,
+    "response_gain": 1.0,
+    "line_search": [
+      1.0,
+      0.5,
+      0.25,
+      0.125,
+      0.0625
+    ],
+    "root_tolerance": [
+      5e-07,
+      2e-06
+    ],
+    "coarse_mode": "rigid",
+    "learned_coarse": true,
+    "coarse_composition": "additive",
+    "coupled_attachments": true,
+    "material_film": true,
+    "coarse_metric": "objective"
+  },
+  "training": {
+    "steps": 480,
+    "batch_size": 1,
+    "horizon": 2,
+    "learning_rate": 0.0001,
+    "validation_interval": 60,
+    "validation_steps": 120,
+    "gradient_clip": 1.0,
+    "max_seconds": 3600,
+    "batch_seed": 20261101,
+    "validation_batch_size": 1,
+    "official_sampling_weight": 4,
+    "normalize_acceleration_loss": true
+  },
+  "scope": {
+    "coupling": "Finite particle-body attachments connect cloth and free rigid; other objects independently contact the plane",
+    "self_contact": false,
+    "default_alm_semantics": false,
+    "interobject_contact": false,
+    "attachment_damping": 0.0,
+    "official_coverage": "Incremental explicit admission; all 51 candidates tracked separately",
+    "material_damping": "Objective C-rate tet/membrane and dihedral bending",
+    "teacher_target": "Authored demo iteration budgets; high-budget reference discrepancy is reported separately, not claimed converged"
+  },
+  "initialize_from": "/home/oem/code/worldparticle/checkpoints/mixed_conditioned_v4/shared.pt",
+  "loss_reference_dt": 0.008333333333333333
+}

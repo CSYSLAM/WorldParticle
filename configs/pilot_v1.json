@@ -1,0 +1,21 @@
+{
+  "name": "shared_pilot_v1",
+  "seed": 20261030,
+  "newton_root": "/home/oem/code/engine/newton",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "data_dir": ".local/pilot_v1/data",
+  "report_dir": "reports/pilot_v1",
+  "checkpoint_dir": "checkpoints/pilot_v1",
+  "device": "cuda:0",
+  "families": ["softbody", "cloth", "joint", "rod"],
+  "dt": 0.008333333333333333,
+  "steps": 48,
+  "scenes_per_family": 8,
+  "splits": {"train": [0, 1, 2, 3, 4, 5], "validation": [6], "test": [7]},
+  "teacher_iterations": 64,
+  "convergence_iterations": 128,
+  "convergence_max_position_error_over_L": 0.002,
+  "model": {"width": 96, "heads": 4, "encoder_layers": 2, "decoder_layers": 1, "unroll": 2, "relaxation": 0.5, "max_translation_over_L": 0.08, "max_rotation": 0.15},
+  "training": {"steps": 1600, "batch_size": 12, "learning_rate": 0.0003, "weight_decay": 0.0001, "gradient_clip": 1.0, "validation_interval": 100, "rollout_length": 2, "max_seconds": 900},
+  "scope": {"contacts": "UNSUPPORTED", "damping": "zero in this pilot", "joint_types": ["FIXED", "REVOLUTE", "ROD"], "multiturn": "UNSUPPORTED", "constitutive_history": "stateless pilot materials", "formal_safety_claim": false}
+}

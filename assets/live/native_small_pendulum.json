@@ -1,0 +1,89 @@
+{
+  "schema": "native_shared_asset_v1",
+  "gravity": [
+    0,
+    0,
+    -9.8
+  ],
+  "simulation": {
+    "dt": 0.008333333333333333,
+    "substeps": 2,
+    "motion_budget": 0.02
+  },
+  "contact": {
+    "friction": 0.1,
+    "rigid_ke": 2000.0,
+    "rigid_kd": 0.1,
+    "shape_margin": 0.003,
+    "ground_height": 0.0
+  },
+  "name": "isolated_small_pendulum",
+  "solver": {
+    "rigid_joint_linear_ke": 1000000.0,
+    "rigid_joint_angular_ke": 1000000.0,
+    "rigid_joint_linear_kd": 0.0,
+    "rigid_joint_angular_kd": 0.0
+  },
+  "objects": [
+    {
+      "name": "pendulum_bar",
+      "family": "rigid",
+      "position": [
+        -0.0049916708323414095,
+        0.0,
+        0.4502497917360987
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.7415636913464777,
+        0.0,
+        0.6708824723277438
+      ],
+      "geometry": {
+        "type": "box",
+        "half_extents": [
+          0.05,
+          0.012,
+          0.012
+        ]
+      },
+      "material": {
+        "density": 1000.0
+      }
+    }
+  ],
+  "joints": [
+    {
+      "type": "revolute",
+      "parent": "world",
+      "child": "pendulum_bar",
+      "axis": [
+        0,
+        1,
+        0
+      ],
+      "parent_frame": [
+        0,
+        0,
+        0.5,
+        0,
+        0,
+        0,
+        1
+      ],
+      "child_frame": [
+        -0.05,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1
+      ],
+      "target_pos": 0.0,
+      "target_vel": 0.0,
+      "target_ke": 0.0,
+      "target_kd": 0.0
+    }
+  ]
+}

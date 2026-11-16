@@ -1,0 +1,18 @@
+{
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "demo": "vbd.example_cable_michell_threshold",
+  "frames": 360,
+  "budgets": [128, 256],
+  "data_dir": ".local/refined_michell_v18",
+  "report_dir": "reports/refined_michell_v18",
+  "position_refinement_limit_over_L": 0.002,
+  "orientation_refinement_limit_rad": 0.002,
+  "episodes": [
+    {
+      "name": "original_audit",
+      "factor": 1.0,
+      "split": "source_audit_only"
+    }
+  ],
+  "scope": "Unstable closed-ring source refinement audit only. Not part of v18 train, validation or weight selection. Phase-dependent pose differences must not silently be admitted as reliable MSE targets."
+}

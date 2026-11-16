@@ -1,0 +1,17 @@
+{
+  "schema": "native_shared_asset_v1",
+  "name": "five_families_ground",
+  "gravity": [0, 0, -9.8],
+  "simulation": {"dt": 0.0016666666666666668, "substeps": 10, "motion_budget": 0.02},
+  "contact": {"friction": 0.35, "rigid_ke": 2000, "rigid_kd": 0.1, "soft_ke": 100, "soft_kd": 0.1, "shape_margin": 0.003, "self_margin": 0.01, "self_gap": 0.005, "ground_height": 0},
+  "objects": [
+    {"name": "cloth", "family": "cloth", "position": [0, 0, 0.06], "geometry": {"type": "grid", "resolution": [2, 2], "size": [0.2, 0.2]}, "particle_radius": 0.005, "pins": [0, 3, 6], "material": {"stretch": 300, "area": 300, "bending": 0.03, "damping": 0.1, "bend_damping": 0.01, "mass": 0.001}},
+    {"name": "soft_cube", "family": "softbody", "position": [0.025, 0.025, 0.105], "geometry": {"type": "grid", "resolution": [1, 1, 1], "size": [0.04, 0.04, 0.04]}, "particle_radius": 0.005, "pins": [], "material": {"mu": 100, "lambda": 100, "density": 50, "damping": 0.1}},
+    {"name": "cable", "family": "rod", "position": [-0.04, 0.03, 0.08], "geometry": {"type": "polyline", "points": [[0, 0, 0], [0.075, 0, 0], [0.15, 0, 0], [0.225, 0, 0], [0.3, 0, 0]], "radius": 0.012}, "fixed_segments": [], "material": {"stretch": 1000, "shear": 1000, "bending": 0.1, "twist": 0.1, "density": 1000, "bend_damping": 0.01}},
+    {"name": "free_box", "family": "rigid", "position": [0.28, 0.03, 0.036], "geometry": {"type": "box", "half_extents": [0.025, 0.025, 0.03]}, "material": {"density": 1000}},
+    {"name": "hinged_bar", "family": "rigid", "position": [-0.06, 0.03, 0.14], "geometry": {"type": "box", "half_extents": [0.05, 0.012, 0.012]}, "material": {"density": 1000}}
+  ],
+  "joints": [
+    {"type": "revolute", "parent": "world", "child": "hinged_bar", "axis": [0, 1, 0], "parent_frame": [-0.11, 0.03, 0.14, 0, 0, 0, 1], "child_frame": [-0.05, 0, 0, 0, 0, 0, 1]}
+  ]
+}

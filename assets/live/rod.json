@@ -1,0 +1,59 @@
+{
+  "name": "Rod — shared model",
+  "family": "rod",
+  "geometry": {
+    "type": "rod",
+    "points": [
+      [
+        0.0,
+        0,
+        0
+      ],
+      [
+        0.1,
+        0,
+        0
+      ],
+      [
+        0.2,
+        0,
+        0
+      ],
+      [
+        0.30000000000000004,
+        0,
+        0
+      ],
+      [
+        0.4,
+        0,
+        0
+      ]
+    ],
+    "radius": 0.015
+  },
+  "material": {
+    "stretch": 2000.0,
+    "shear": 1400.0,
+    "bending": 0.8,
+    "twist": 0.56,
+    "density": 1000.0,
+    "damping": 0.0
+  },
+  "fixed_segments": [
+    0
+  ],
+  "position": [
+    0,
+    0,
+    2
+  ],
+  "gravity": [
+    0,
+    0,
+    -4.8
+  ],
+  "dt": 0.008333333333333333,
+  "reference_length": 0.4,
+  "contacts": false
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "shared_capacity_research_v78",
+  "status": "CPU_CAPACITY_AND_SMALL_TRAINING_PROBE_ONLY",
+  "minimum_shared_latent_width": 648,
+  "model": {
+    "protected_width": 648,
+    "hierarchy_heads": 12,
+    "hierarchy_encoder_layers": 6,
+    "hierarchy_decoder_layers": 4,
+    "maximum_super_tokens": 128
+  },
+  "active_neural_parameters": 46882811,
+  "training_plan": {
+    "trainable_prefixes": [
+      "protected_response."
+    ],
+    "shared_across_types": true,
+    "material_conditioning_trainable": true,
+    "contacts_keep_full_geometric_resolution": true,
+    "warmup": "Zero-initialized response gates naturally open across initial optimizer updates; verify encoder/decoder/material gradients, not only requires_grad.",
+    "dense_contact_memory": "Profile original late twist with >200000 candidates, then implement verified relation packing/checkpointing before full 648-dimensional training.",
+    "coverage_target": 51,
+    "source_budget_and_parameter_sweeps": "Original VBD demos, cross-type coupling, held-out physical parameter combinations, and autonomous rollout behavior."
+  },
+  "baseline_selected_checkpoint": "checkpoints/shared_particle_hanging_v63/shared_strict.pt",
+  "baseline_selected_official_coverage": 30,
+  "new_candidate_selected_official_coverage": 0,
+  "probe_optimizer_updates": 3,
+  "report": "reports/shared_capacity_v78/learning_probe_cpu.json",
+  "report_sha256": "fca311c0fe4d94eee13addf6f6e3515a487d91029cf14af3a40598225b2655fc",
+  "scope": "648 is the actual shared hidden width, not a concatenated input count. Three optimization steps are a gradient-route probe on one small mixed asset. This is not a trained replacement, official-demo admission, generalized accuracy or realtime claim.",
+  "neural_packing": {
+    "available": true,
+    "default": false,
+    "cpu_neural_equivalence": "reports/shared_capacity_v78/neural_packing_cpu.json",
+    "preserves_full_physical_and_geometric_candidate_rows": true,
+    "cuda_graph_capture": false,
+    "dense_official_full_backbone_check": "CPU_ONE_STEP_PASS"
+  },
+  "user_resource_policy": {
+    "maximum_gpu_process_gib": 12,
+    "ordinary_demos_first": true,
+    "batch_size": 1,
+    "target_duty_cycle": 0.25,
+    "dense_gpu_pressure_test_deferred": true
+  }
+}

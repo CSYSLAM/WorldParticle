@@ -1,0 +1,6 @@
+# Asset readers matched to the pinned local Newton environment.
+# Keep the existing Torch, Warp and Newton installations.
+GitPython==3.1.59
+gitdb==4.0.12
+smmap==5.0.3
+pycollada==0.9.3

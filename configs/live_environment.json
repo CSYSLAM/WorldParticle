@@ -1,0 +1,18 @@
+{
+  "purpose": "Native viewer additions to the P0 environment, not a portable installer lock",
+  "python": "3.12.13",
+  "newton_root": "/home/oem/code/engine/newton",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "packages": {
+    "torch": "2.7.1+cu128",
+    "numpy": "1.26.4",
+    "warp-lang": "1.17.0",
+    "pyglet": "2.1.14",
+    "imgui-bundle": "1.92.801",
+    "PyOpenGL": "3.1.10",
+    "glfw": "2.10.0",
+    "Pillow": "13.0.0"
+  },
+  "deterministic_live": true,
+  "CUBLAS_WORKSPACE_CONFIG": ":4096:8"
+}
