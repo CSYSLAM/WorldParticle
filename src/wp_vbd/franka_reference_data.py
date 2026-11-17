@@ -6,7 +6,6 @@ inference entry does not import this module or read reference states.
 import hashlib
 import json
 from pathlib import Path
-import subprocess
 
 import numpy as np
 import torch
@@ -17,6 +16,7 @@ from .franka_vbd_scene import build
 from .surface_joint_scene import export_model, CONTRACT
 from .surface_joint_data import restore_joint_source
 from .surface_joint_runtime import SurfaceJointCollisionOracle
+from .newton_source import newton_revision
 
 SCHEMA='authored_franka_substep_reference_v310'
 
@@ -25,7 +25,7 @@ def digest(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def newton_version():
-    return subprocess.check_output(['git','rev-parse','HEAD'],cwd='/home/oem/code/engine/newton',text=True).strip()
+    return newton_revision()
 
 
 def rebuild(run, source, wp, newton, device):

@@ -174,6 +174,7 @@ class ProtectedCoarse:
             result=result.index_copy(1,self.singleton_ids,value)
         for index,(ids, q) in enumerate(self.groups):
             if self.singleton_group_mask[index]:continue
+            if not q.shape[-1]:continue
             coefficient = torch.einsum('bnip,bniq->bpq', q, source[:, ids])
             result = result.index_add(1, ids, torch.einsum('bnip,bpq->bniq', q, coefficient))
         return (result[..., 0] if vector else result).to(value.dtype)
@@ -364,12 +365,20 @@ class InvariantPortResponse(nn.Module):
 
 
 def protected_update(model, scene, state, metric, raw_coarse, residual, whitening, baseline, relation, physical, dt, learned, *, return_parts=False):
-    if getattr(scene,'component_batch',False):
+    independent=bool(scene.metadata.get('independent_object_motion_modes'))
+    if independent and (scene.metadata.get('contract')!='elastic_surface_joint_contact_v38' or not scene.metadata.get('joint_tree_coarse_modes')):
+        raise ValueError('Independent object modes require the surface/joint tree contract')
+    # The packed six-column factor cannot represent two independent objects
+    # plus tree columns. Use the declared 18-column energy embedding even
+    # when the surrounding sparse operations are batched by component.
+    if getattr(scene,'component_batch',False) and not independent:
         from .component_batch import BatchedRigidCoarse
         coarse=BatchedRigidCoarse(scene,metric,raw_coarse.blocks)
     else:
         maximum=18 if scene.metadata.get('contract') in ('rod_shape_contact_com_v40','elastic_rod_surface_joint_self_contact_v222') and model.config.get('rod_gravity_material_ports',False) else 12
-        coarse = ProtectedCoarse(scene, metric, raw_coarse.blocks,maximum_columns=maximum,exact_rigid_singletons=bool(getattr(scene,'fast_rigid_contact',False)))
+        if independent:maximum=18
+        coarse = ProtectedCoarse(scene, metric, raw_coarse.blocks,maximum_columns=maximum,
+                                exact_rigid_singletons=bool(getattr(scene,'fast_rigid_contact',False)) and not independent)
     source = residual.double()
     coarse_r = coarse(source)
     complement = source - metric_action(metric, coarse_r)
@@ -385,7 +394,17 @@ def protected_update(model, scene, state, metric, raw_coarse, residual, whitenin
         local = -(w @ baseline.double() @ (w @ complement[..., None]))[..., 0]
         valid = torch.ones(len(source), device=source.device, dtype=torch.bool)
     protected_part = -gain*coarse_r
-    update = protected_part + local - coarse(metric_action(metric, local))
+    complementary_part = local - coarse(metric_action(metric, local))
+    if scene.metadata.get('independent_object_motion_modes'):
+        # A complete coarse basis leaves an exactly empty complement.
+        # Forming B r - Q H B r numerically leaves signed roundoff that
+        # can spuriously fail the strict descent test on a FREE singleton.
+        for index,ids in enumerate(scene.interaction_entities):
+            if not coarse.groups[index][1].shape[-1]:continue
+            complete=coarse.ranks[index]>=scene.dof[ids].sum()
+            complementary_part=complementary_part.index_copy(1,ids,
+                torch.where(complete[:,None,None],0.,complementary_part[:,ids]))
+    update = protected_part + complementary_part
     if return_parts:
         return update.to(residual.dtype), coarse_r.to(residual.dtype), coarse.valid & valid, protected_part.to(residual.dtype)
     return update.to(residual.dtype), coarse_r.to(residual.dtype), coarse.valid & valid

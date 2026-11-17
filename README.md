@@ -21,6 +21,8 @@
 | `scripts/run_native_asset_live.py` | 输入资产 JSON、物理参数和权重，打开 Newton 窗口 |
 | `scripts/run_official_live.py` | 官方 demo 的共享模型推理入口 |
 | `scripts/run_franka_soft_grasp.py` | 自建单求解器 Franka + 软块场景 |
+| `scripts/run_franka_rigid_cloth.py` | Franka 抓取自由刚体并放到布面，支持 GPU / CPU 和窗口 |
+| `scripts/render_franka_model_video.py`、`verify_franka_video.py` | 双视角离线渲染、完整解码与动作阶段检查 |
 | `scripts/collect_*.py`、`prepare_*.py` | 离线 VBD 采集、数据转换和资格检查 |
 | `scripts/train_normal_shared_648.py` | 多类型混合训练与固定窗口 loss 监控 |
 | `scripts/verify_*.py`、`tests/reference_v310/` | 相关物理、梯度及实现对照检查 |
@@ -37,7 +39,7 @@ python scripts/run_franka_soft_grasp.py --device cuda:0 \
 python scripts/run_franka_soft_grasp.py --device cpu \
   --checkpoint /path/to/checkpoint.pt --window --output /path/to/new_cpu_run
 
-# 完整命令时间线入口；完整接近动作的长程质量仍待验证
+# 自建软块的完整接近、夹紧、抬升时间线
 python scripts/run_franka_soft_grasp.py --device cuda:0 \
   --checkpoint /path/to/checkpoint.pt --start-time 0 --frames 240 \
   --output /path/to/full_timeline
@@ -46,6 +48,25 @@ python scripts/run_franka_soft_grasp.py --device cuda:0 \
 python scripts/run_native_asset_live.py --device cuda:0 \
   --checkpoint /path/to/checkpoint.pt --asset assets/live/native_five_families.json
 ```
+
+新建的刚体放布场景使用同一套共享网络；机械臂通过有限关节驱动跟踪 IK 目标，自由刚体靠接触夹持，布料边缘夹持在支架上。完整动作含接近、抓取、搬运、松手、撤离与静置，共 6.4 秒物理时间。推理目前慢于实时。
+
+```bash
+# 指向独立的 Newton 固定版本源码，不需要切换已有 Newton 工作目录
+export WP_VBD_NEWTON_ROOT=/path/to/newton
+python scripts/run_franka_rigid_cloth.py --device cuda:0 \
+  --checkpoint /path/to/checkpoint.pt --output outputs/rigid_cloth
+
+# 可在推理时加 --window；也可对保存状态离线生成双视角视频
+python scripts/render_franka_model_video.py \
+  --recording outputs/rigid_cloth --output outputs/rigid_cloth.mp4
+python scripts/review_franka_recording.py \
+  --recording outputs/rigid_cloth --report outputs/rigid_cloth_geometry.json
+python scripts/verify_franka_video.py \
+  --video outputs/rigid_cloth.mp4 --report outputs/rigid_cloth_video.json
+```
+
+运行输出不得重复使用已有结果目录。长任务可通过 `run_franka_vbd_shared.py --resume-recording` 从自身已接受的完整模型帧继续；续算检查权重、Newton 版本、资产、时间步和物理参数，并记录来源，不使用教师状态替换推理状态。
 
 训练入口要求已经通过资格检查的数据清单和初始化权重：
 
@@ -61,7 +82,7 @@ python scripts/run_franka_mixed_course.py --plan /path/to/new_course/launch_plan
 
 当前实测环境为 Python 3.12、PyTorch 2.7.1+cu128、Warp 1.17.0、NumPy 1.26.4、trimesh 5.1.1。Newton 固定在 `25298aea1691e060c86f95e8d2b773c898c006d3`，不在本仓库中。
 
-现有研究脚本默认使用 `/home/oem/code/engine/newton`，部分资产工具也引用该 Newton 环境；迁移机器时需要调整这些路径。`environment.yaml` 对应原 WorldParticle，不是新共享求解器的完整环境锁。资产读取补充依赖可安装：
+当前 Franka、训练和官方入口通过 `WP_VBD_NEWTON_ROOT` 选择 Newton 源码，并记录真实版本；未设置时默认 `/home/oem/code/engine/newton`。推理、续算、几何复核与渲染应使用同一固定版本。部分早期资产工具仍引用本机路径；迁移机器时需要调整。`environment.yaml` 对应原 WorldParticle，不是新共享求解器的完整环境锁。资产读取补充依赖可安装：
 
 ```bash
 python -m pip install -r requirements-vbd-assets.txt
@@ -74,7 +95,9 @@ python -m pip install -r requirements-vbd-assets.txt
 - 同配置下，`h=1/600` 能抓起，`h=1/60` 未抓起。1.95 s 物理过程原耗时约 978 s，**尚不具备实时速度**。
 - 新课程保留 69 组旧数据并加入 1 组 Franka 数据，已完成 **156 次**更新，70 组数据均获得实际参数更新；新增 Franka 获得 18 次更新。记录中 155 次具有正梯度并改变了跟踪参数标量，1 次为零梯度。用户要求暂停时，最终开发集复测尚未完成，未产生合格的新导出权重。
 - Franka 固定窗口 loss：`0.03910 → 0.03944 → 0.03988`，目前**没有证据表明这轮扩训改善或收敛**。短窗口检查不代替完整轨迹、材料泛化或视觉验收。
-- 最新静态拓扑缓存已通过 CPU 正向、反向和失效条件对照；CUDA Graph、BF16 及精简数值诊断是实验性推理选项，GPU 等价性、速度和完整轨迹尚待验证，默认保留 FP32。
-- 关节—材料运动粗空间的当前 Franka 路径要求每个交互分量只有一个材料对象；不能据此宣称已支持机器人同时抓取任意多个软体、布料和 cable。
+- 静态拓扑缓存已通过 CPU / GPU 对照；表面接触分组全部接受后结束无效的剩余线搜索，并保留未接受分组的完整候选预算。小窗口测得约 1.39 倍提速，不能外推为全部场景的速度。CUDA Graph 未在该小场景获得提速，BF16 的差异更大，默认仍为 FP32 / eager。
+- step 156 的共享权重已跑通自建软块的完整 4 秒动作，抬升约 10.1 cm；这项任务结果不代表新的训练收敛认证。
+- 同一权重已在新建 Franka + 自由刚体 + 81 粒子布料场景运行完整 6.4 秒动作：抬升约 9.1 cm、横移约 25.9 cm，松手后布料额外下垂约 5.5 mm，刚体末态稳定。385 个保存状态的离散检查中，刚体接触最大重叠约 5.16 mm（取物台上的夹取初段），刚体—布料最大重叠约 0.044 mm。该结果由自身模型帧续算完成；没有调用 VBD / Featherstone 推进或读取教师轨迹。
+- 原有 12 列粗空间保留；新场景显式启用最多 18 列的独立对象模式，容纳至多两个自由对象的各 6 列与至多 6 列关节树方向，不增加神经参数。当前不是任意数量对象的机器人耦合认证。
 
 不要把本分支视为已完成所有 demo 替代、完全无穿透或实时性能认证的发行版。

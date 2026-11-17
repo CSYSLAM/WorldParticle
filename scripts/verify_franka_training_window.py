@@ -8,7 +8,9 @@ import sys
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(ROOT/'src'),'/home/oem/code/engine/newton']
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.newton_source import activate_newton_source, source_root
+NEWTON_ROOT=source_root()
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 
 
@@ -21,13 +23,14 @@ def main():
     parser.add_argument('--backward',action='store_true')
     parser.add_argument('--report',type=Path,required=True)
     args=parser.parse_args()
+    activate_newton_source()
     if args.report.exists():raise FileExistsError(args.report)
     from wp_vbd.gpu_ownership import claim_cuda
     ownership=claim_cuda(args.device,ROOT)
     import torch
     import warp as wp
     import newton
-    sys.path.append('/home/oem/code/engine/newton/.venv/lib/python3.12/site-packages')
+    sys.path.append(str(NEWTON_ROOT/'.venv/lib/python3.12/site-packages'))
     from wp_vbd.franka_reference_data import load_reference
     from wp_vbd.mixed_solver import MixedSolver
     from wp_vbd.mixed_experiment import select,loss,external_inputs
@@ -42,8 +45,9 @@ def main():
     for cls in (newton.solvers.SolverVBD,newton.solvers.SolverFeatherstone):cls.__init__=forbidden;cls.step=forbidden
     scene,states=load_reference(args.dataset,wp,newton,args.device)
     if not 0<=args.index<len(states['x'])-2:raise ValueError('A complete two-hop window is required')
-    stored=torch.load(args.checkpoint,map_location=args.device,weights_only=True)
-    model=MixedSolver(stored['config']['model']).to(args.device).eval();model.load_state_dict(stored['model'])
+    stored=torch.load(args.checkpoint,map_location='cpu',weights_only=True)
+    config=stored['model_config'] if 'model_config' in stored else stored['config']['model']
+    model=MixedSolver(config).to(args.device).eval();model.load_state_dict(stored['model'])
     calls=0
     def count(*unused):
         nonlocal calls
@@ -72,7 +76,7 @@ def main():
         assert finite and norm>0 and nonzero>0
         gradient={'finite':finite,'norm':norm,'nonzero_parameter_tensors':nonzero}
     assert solver_vbd.project_joint_mimics is native_projection
-    assert all(torch.equal(p.detach(),stored['model'][name]) for name,p in model.named_parameters())
+    assert all(torch.equal(p.detach().cpu(),stored['model'][name]) for name,p in model.named_parameters())
     result={'status':'PASS','device':args.device,'index':args.index,'hops':rows,
             'total_two_hop_loss':float(total.detach()),'forward_encoder_calls':forward_calls,
             'backward_recomputation_encoder_calls':calls-forward_calls,'gradient':gradient,

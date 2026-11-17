@@ -18,7 +18,11 @@ def scale_proposal(scene, metric, residual, update):
         scales=torch.ones_like(update[...,0])
         valid=torch.ones(len(update),device=update.device,dtype=torch.bool)
         details=[]
-        for ids in scene.interaction_entities:
+        # Fixed singleton pins contribute identically zero work/curvature.
+        # Reuse the same active component cache as the neural response.
+        active=getattr(scene,'_vector_active_components',range(len(scene.interaction_entities)))
+        for index in active:
+            ids=scene.interaction_entities[index]
             numerator=-(residual[:,ids]*update[:,ids]).sum((1,2))
             denominator=(update[:,ids]*image[:,ids]).sum((1,2))
             good=torch.isfinite(numerator)&torch.isfinite(denominator)&(numerator>=0)&(denominator>=0)

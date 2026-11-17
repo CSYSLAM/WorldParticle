@@ -18,6 +18,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--device',choices=('cpu','cuda:0'),default='cuda:0')
+    parser.add_argument('--gpu-memory-gib',type=float,default=12.)
     parser.add_argument('--checkpoint',type=Path,default=ROOT/'checkpoints/plateau_review_v303/shared_trial_2478.pt')
     parser.add_argument('--window',action='store_true')
     parser.add_argument('--frames',type=int,default=117)
@@ -32,7 +33,8 @@ def main():
     parser.add_argument('--print-command',action='store_true',help='Print the exact argv without running inference')
     args=parser.parse_args()
     command=[sys.executable,'-u','-B',str(ROOT/'scripts/run_franka_vbd_shared.py'),
-             '--device',args.device,'--checkpoint',str(args.checkpoint),'--frames',str(args.frames),
+             '--device',args.device,'--gpu-memory-gib',str(args.gpu_memory_gib),
+             '--checkpoint',str(args.checkpoint),'--frames',str(args.frames),
              '--substeps',str(args.substeps),'--start-time',str(args.start_time),'--material-mu',str(args.material_mu),
              '--material-lambda',str(args.material_lambda),'--friction',str(args.friction),
              '--arm-drive-ke','20000','--grasp-x','0','--grasp-yaw','-0.7853981633974483',

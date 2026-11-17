@@ -39,6 +39,12 @@ def choose(scene,current,start,update,tx,tq,context,frozen,alphas,*,physics=None
             for label in torch.unique(acceptance_labels[scene.movable]).tolist()]
     if fast:old_group=before.new_zeros(before.shape).index_add(1,groups,before)
     selected=torch.zeros_like(current.x[...,0],dtype=torch.bool);chosen=current
+    # Surface/joint merit, retraction and path checks have no persistent
+    # side effects. Repair supervision is different: it records every trial,
+    # so retain its full schedule even after the selected states are final.
+    completed_surface_search=(scene.metadata.get('contract')=='elastic_surface_joint_contact_v38'
+        and not (getattr(scene,'learned_contact_repair',False) and hasattr(c,'self_snapshot'))
+        and not scene.metadata.get('evaluate_all_line_search_rays',False))
     used=torch.zeros_like(current.x[...,0])
     scaled=prepared_geometric
     if not geometry_prepared and physics is not None and hasattr(physics,'proposal_scale'):
@@ -96,7 +102,7 @@ def choose(scene,current,start,update,tx,tq,context,frozen,alphas,*,physics=None
         # every movable group has accepted a ray, later rays cannot replace
         # any chosen state or feedback. Keep their full budget for groups
         # which still need a smaller admissible step.
-        if scene.metadata.get('contract')=='elastic_rod_surface_joint_self_contact_v222' and bool((selected|~scene.movable[None]).all()):
+        if (scene.metadata.get('contract')=='elastic_rod_surface_joint_self_contact_v222' or completed_surface_search) and bool((selected|~scene.movable[None]).all()):
             break
     selected=selected|~scene.movable[None]
     return chosen,selected,used

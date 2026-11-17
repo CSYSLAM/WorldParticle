@@ -5,8 +5,9 @@ import inspect
 from contextlib import nullcontext
 from pathlib import Path
 import sys
+from .newton_source import source_root, activate_newton_source
 
-NEWTON_ROOT=Path('/home/oem/code/engine/newton')
+NEWTON_ROOT=source_root()
 
 
 def solver_configuration_record(configuration):
@@ -25,7 +26,7 @@ def make_example(identifier, *, arguments=(), reference=True, iterations=None,vi
     allowed={'particle_vertex_contact_buffer_size','particle_edge_contact_buffer_size'}
     if set(capacity)-allowed or any(type(value) is not int or value<=0 for value in capacity.values()):
         raise ValueError('Only explicit positive particle contact buffer capacities may be overridden')
-    sys.path.insert(0,str(NEWTON_ROOT))
+    activate_newton_source()
     import newton
     import newton.examples
     import warp as wp

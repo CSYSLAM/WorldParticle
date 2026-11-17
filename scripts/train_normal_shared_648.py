@@ -18,7 +18,8 @@ import sys
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(ROOT/'src'),'/home/oem/code/engine/newton']
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.newton_source import activate_newton_source
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 
 
@@ -79,6 +80,7 @@ def main():
     parser.add_argument('--loss-monitor-interval',type=int,default=0,help='Monitor fixed authored and representative official windows without gradients or old32 comparisons')
     parser.add_argument('--self-broad-phase',choices=('chunked','kdtree'),help='Complete self-contact candidate query; default kdtree on CPU and chunked on CUDA')
     args=parser.parse_args()
+    activate_newton_source()
     if args.updates<1 or args.validation_interval<1 or not 0<args.duty_cycle<=1:parser.error('Positive update budgets and duty cycle in (0,1] required')
     if args.gpu_memory_gib<=2:parser.error('Reserve two GiB for native geometry and device libraries')
     if args.checkpoint_relation_ffn_rows<0:parser.error('Nonnegative relation FFN chunk size required')

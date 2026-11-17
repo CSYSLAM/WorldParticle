@@ -10,7 +10,8 @@ from pathlib import Path
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(ROOT/'src'),'/home/oem/code/engine/newton']
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.newton_source import activate_newton_source
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 
 
@@ -21,6 +22,7 @@ def main():
     parser.add_argument('--checkpoint',type=Path,default=ROOT/'checkpoints/plateau_review_v303/shared_trial_2478.pt')
     parser.add_argument('--report',type=Path,required=True)
     args=parser.parse_args()
+    activate_newton_source()
     if args.report.exists():raise FileExistsError(args.report)
     from wp_vbd.gpu_ownership import claim_cuda
     ownership=claim_cuda(args.device,ROOT)
@@ -112,7 +114,7 @@ def main():
     with torch.inference_mode():unversioned=torch.tensor([1.])
     assert tensor_versions((unversioned,)) is None
     payload=args.checkpoint.read_bytes();checkpoint_sha=hashlib.sha256(payload).hexdigest()
-    stored=torch.load(io.BytesIO(payload),map_location=args.device,weights_only=True);del payload
+    stored=torch.load(io.BytesIO(payload),map_location='cpu',weights_only=True);del payload
     config=stored['model_config'] if 'model_config' in stored else stored['config']['model']
     model=MixedSolver(config).to(args.device).eval();model.load_state_dict(stored['model'])
     results=[]
@@ -132,7 +134,7 @@ def main():
     for name,a in results[0][3].items():
         b=results[1][3][name];gradient_error=max(gradient_error,float((a-b).abs().max()))
         assert torch.allclose(a,b,atol=1e-10,rtol=1e-6),name
-    assert all(torch.equal(p,stored['model'][name]) for name,p in model.named_parameters())
+    assert all(torch.equal(p.detach().cpu(),stored['model'][name]) for name,p in model.named_parameters())
     digest=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
     reference_hashes={name:digest(args.baseline_root/'src/wp_vbd'/f'{name}.py') for name in ('mimic_constraint','articulation_coarse','metric_ray_step')}
     candidate_hashes={name:digest(ROOT/'src/wp_vbd'/f'{name}.py') for name in (*reference_hashes,'static_topology')}

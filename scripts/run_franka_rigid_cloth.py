@@ -1,0 +1,37 @@
+"""Infer a complete dynamic Franka pick/place onto a deformable cloth.
+
+The payload is a free rigid body. IK supplies arm drive targets only.
+The shared checkpoint and the physical response run on the chosen device.
+Render the resulting recording with render_franka_model_video.py.
+"""
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+ROOT=Path(__file__).resolve().parents[1]
+
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--checkpoint',type=Path,default=ROOT/'checkpoints/mixed_course/last.pt')
+    p.add_argument('--device',choices=('cuda:0','cpu'),default='cuda:0')
+    p.add_argument('--gpu-memory-gib',type=float,default=12.)
+    p.add_argument('--frames',type=int,default=384)
+    p.add_argument('--window',action='store_true')
+    p.add_argument('--print-command',action='store_true')
+    a=p.parse_args()
+    command=[sys.executable,'-u',str(ROOT/'scripts/run_franka_vbd_shared.py'),
+             '--output',str(a.output),'--checkpoint',str(a.checkpoint),'--device',a.device,
+             '--gpu-memory-gib',str(a.gpu_memory_gib),'--frames',str(a.frames),
+             '--soft-asset','rigid_cloth','--arm-drive-ke','20000','--grip-closed','.0225',
+             '--articulation-modes','--separate-coarse-step','--tangent-support-scale','8',
+             '--force-aware-anticipation','--compact-diagnostics']
+    if a.window:command.append('--window')
+    if a.print_command:print(json.dumps(command,ensure_ascii=False,indent=2));return
+    subprocess.run(command,check=True)
+
+
+if __name__=='__main__':main()

@@ -3,7 +3,9 @@
 Each scalar joint moves its child subtree coherently. A maximum of six
 columns per interaction is selected by frozen physical work/curvature, in
 addition to the existing six rigid columns. No target poses are assigned,
-no dynamics solver is called, and the existing twelve-column budget stays.
+no dynamics solver is called. The default budget is twelve columns. The
+explicit independent-object path admits two free objects plus tree modes
+within eighteen columns, without changing the learned architecture.
 """
 from types import SimpleNamespace
 
@@ -129,7 +131,30 @@ def augment(scene, state, base, metric, residual, *, maximum_extra=6):
             ids = ports.ids
             base_space='interaction_rigid';material_id=None
             material_mask=scene.kind[ids]<2;rigid_ids=ids[scene.kind[ids]==2]
-            if scene.metadata.get('articulation_material_motion_modes') and bool(material_mask.any()) and len(rigid_ids):
+            if scene.metadata.get('independent_object_motion_modes'):
+                # A free payload must translate independently of both the
+                # anchored arm and the cloth. Allocate physical modes by
+                # authored object, retaining the same learned response.
+                plan=topology(scene)
+                if any(i in plan.anchored and not plan.anchored[i] for i in rigid_ids.tolist()):
+                    raise ValueError('Floating articulated trees need root-coherent object modes')
+                free_mask=material_mask.clone()
+                free_mask[scene.kind[ids]==2]=torch.tensor(
+                    [i not in plan.anchored for i in rigid_ids.tolist()],device=ids.device,dtype=torch.bool)
+                groups=torch.unique(scene.object_id[ids[free_mask]])
+                if len(groups)>2:
+                    raise ValueError('Independent motion allocation admits at most two free objects per interaction')
+                object_modes=[]
+                for group in groups:
+                    local=torch.where(free_mask & (scene.object_id[ids]==group))[0]
+                    entity=ids[local];mass=scene.mass[entity]
+                    center=(state.x[:,entity]*mass[None,:,None]).sum(1,keepdim=True)/mass.sum()
+                    value=rigid_component_modes(state.x[:,entity],center,scene.dof[entity]).to(rigid.dtype)
+                    object_modes.append(rigid.new_zeros(*rigid.shape[:-1],6).index_copy(1,local,value))
+                if object_modes:rigid=torch.cat(object_modes,-1)
+                base_space='independent_objects' if object_modes else 'interaction_rigid'
+                material_id=groups.tolist()
+            elif scene.metadata.get('articulation_material_motion_modes') and bool(material_mask.any()) and len(rigid_ids):
                 groups=torch.unique(scene.object_id[ids[material_mask]])
                 plan=topology(scene)
                 if len(groups)!=1 or any(not plan.anchored.get(i,False) for i in rigid_ids.tolist()):
@@ -152,6 +177,6 @@ def augment(scene, state, base, metric, residual, *, maximum_extra=6):
                              'estimated_physical_work':score[order].tolist(),
                              'base_space':base_space,'material_object_id':material_id})
         scene.articulation_coarse_diagnostic = {'maximum_extra_columns':maximum_extra,
-                                               'maximum_total_columns':12,'maximum_candidate_columns':24,
+                                               'maximum_total_columns':18 if scene.metadata.get('independent_object_motion_modes') else 12,'maximum_candidate_columns':24,
                                                'maximum_scalar_tree_joints':64,'selected':selected}
         return SimpleNamespace(blocks=blocks)

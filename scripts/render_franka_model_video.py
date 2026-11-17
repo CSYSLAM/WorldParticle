@@ -6,7 +6,9 @@ from pathlib import Path
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(ROOT/'src'),'/home/oem/code/engine/newton']
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.newton_source import activate_newton_source, source_root, newton_revision
+NEWTON_ROOT=source_root()
 
 
 def main():
@@ -15,8 +17,12 @@ def main():
     p.add_argument('--snapshot-only',action='store_true')
     p.add_argument('--reference-recording',action='store_true',help='Explicitly label a separately computed offline VBD recording')
     a=p.parse_args()
+    activate_newton_source()
     if a.output.exists():raise FileExistsError(a.output)
     run=json.loads((a.recording/'run.json').read_text())
+    recorded_revision=run.get('newton_source',{}).get('revision')
+    if recorded_revision is not None and recorded_revision!=newton_revision():
+        raise ValueError('Render with the recording Newton revision')
     reference=run['mode']=='offline_vbd_reference'
     if reference!=a.reference_recording:
         raise ValueError('Offline VBD recordings require --reference-recording; model recordings must omit it')
@@ -30,16 +36,25 @@ def main():
     import warp as wp
     import newton
     import newton.viewer
-    sys.path.append('/home/oem/code/engine/newton/.venv/lib/python3.12/site-packages')
+    sys.path.append(str(NEWTON_ROOT/'.venv/lib/python3.12/site-packages'))
     from wp_vbd.franka_vbd_scene import build
+    rigid_cloth=run['scene']=='research.franka_vbd_rigid_cloth'
+    if rigid_cloth:
+        from wp_vbd.franka_rigid_cloth_scene import build
     from PIL import Image,ImageDraw,ImageFont
     import imageio_ffmpeg
     torch.set_num_threads(1)
     wp.config.kernel_cache_dir=str(ROOT/'.local/p0/warp-cache');wp.init();wp.set_device('cpu')
-    parameters=run.get('physical_parameters',{});material=parameters.get('tet_material',[None,None])
+    parameters=run.get('physical_parameters',{});material=parameters.get('tet_material') or [None,None]
     e=build(wp,newton,device='cpu',soft_asset=run['scene'].rsplit('_',1)[-1],initialize_controls=False,
             material_mu=material[0],material_lambda=material[1],arm_drive_ke=parameters.get('arm_drive_ke',2000.),
             friction=parameters.get('friction_override'))
+    if rigid_cloth:
+        # Display-only fabric checks make the recorded bending visible.
+        # Geometry, contacts and all recorded states remain untouched.
+        palette=[(.12,.50,.80) if ((i//2)%8//2+(i//2)//8//2)%2 else (.38,.72,.91)
+                 for i in range(e.model.tri_count)]
+        e.model.tri_color.assign(np.asarray(palette,dtype=np.float32))
     def forbidden(*unused,**kwargs):raise AssertionError('Rendering must not execute dynamics')
     for cls in (newton.solvers.SolverVBD,newton.solvers.SolverFeatherstone):
         cls.__init__=forbidden;cls.step=forbidden
@@ -53,6 +68,9 @@ def main():
     viewer.renderer.spotlight_enabled=False
     camera=[((.70,-1.25,.86),(-.22,-.50,.30),'Franka / offline VBD reference' if reference else 'Franka / articulated response' if run.get('articulation_modes') else 'Franka / dynamic joints'),
             ((.32,-.50,.32),(0.,-.50,.28),'Gripper / elastic contact')]
+    if rigid_cloth:
+        camera=[((.76,-1.27,.89),(-.16,-.50,.28),'Franka / pick and place'),
+                ((.53,-.02,.56),(.055,-.50,.235),'Free rigid box / deformable cloth')]
     font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
     font=ImageFont.truetype(font_path,27);small=ImageFont.truetype(font_path,21)
     def compose(index):
@@ -67,7 +85,8 @@ def main():
             if relaxation!=1.:suffix=f' | mimic relax={relaxation:g}'
             if run.get('solver_parameters',{}).get('offline_reference_mimic_schedule')=='final_iteration':suffix+=' | mimic: final iteration'
             if run.get('ideal_mimic_count')==0:suffix+=' | independent fingers'
-        draw.text((22,16),f'{mode} | Franka + elastic body | {device} | h={dt:.5f}s'+preview+suffix,font=font,fill='white')
+        asset='Franka + rigid box + cloth' if rigid_cloth else 'Franka + elastic body'
+        draw.text((22,16),f'{mode} | {asset} | {device} | h={dt:.5f}s'+preview+suffix,font=font,fill='white')
         for j,(position,target,label) in enumerate(camera):
             viewer.set_camera(wp.vec3(*position));viewer.camera.look_at(np.array(target))
             viewer.begin_frame(float(times[index]));viewer.log_state(e.state_0);viewer.end_frame()
@@ -81,6 +100,11 @@ def main():
         if lifting and run.get('soft_center_lift_m',0.)<.02:
             label='From pinch pose: object NOT lifted'
         if run['status']=='FAILED':label=f'FAILED at {times[-1]:.3f}s / partial recording'
+        if rigid_cloth:
+            from wp_vbd.franka_rigid_cloth_scene import command
+            _,_,phase=command(float(times[index])+run.get('initial_command_time',0.))
+            label=f'Pick / lift / transfer / release / settle | {phase}'
+            if not run.get('full_authored_timeline_recorded'):label+=' / PARTIAL'
         draw.text((22,855),f'Physical time {times[index]:.3f} s | '+label+' | 0.5x playback; not realtime',font=small,fill=(235,205,150))
         return np.asarray(frame)
     a.output.parent.mkdir(parents=True,exist_ok=True)

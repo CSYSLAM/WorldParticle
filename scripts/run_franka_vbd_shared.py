@@ -4,6 +4,7 @@
 VBD and Featherstone execution and consumes no reference trajectory.
 """
 import argparse
+from contextlib import nullcontext
 import hashlib
 import inspect
 import json
@@ -15,7 +16,9 @@ import time
 import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT/'src'), '/home/oem/code/engine/newton']
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.newton_source import source_root, source_record
+NEWTON_ROOT = source_root()
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 
 
@@ -24,9 +27,12 @@ def main():
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--checkpoint', type=Path, default=ROOT/'checkpoints/plateau_review_v303/shared_trial_2478.pt')
     p.add_argument('--device', choices=('cuda:0','cpu'), default='cuda:0')
+    p.add_argument('--gpu-memory-gib',type=float,default=12.,help='CUDA process budget including a two GiB native allocation reserve')
     p.add_argument('--frames', type=int, default=240)
     p.add_argument('--substeps', type=int, default=10)
     p.add_argument('--start-time', type=float, default=0., help='Independently initialize at an authored command pose; never restore teacher state')
+    p.add_argument('--resume-recording',type=Path,help='Continue an accepted rigid/cloth model recording, retaining its complete saved frame prefix')
+    p.add_argument('--place-height',type=float,default=.29,help='Rigid/cloth tool drive target during release; actual pose remains dynamic')
     p.add_argument('--motion-budget',type=float,default=.003,help='Detection envelope in meters; exceeding it rejects the step')
     p.add_argument('--material-mu',type=float);p.add_argument('--material-lambda',type=float)
     p.add_argument('--arm-drive-ke',type=float,default=2000.)
@@ -50,15 +56,25 @@ def main():
     p.add_argument('--grasp-height',type=float,default=.21,help='Tool height during pinch; align the finger pads to the material')
     p.add_argument('--grasp-yaw',type=float,default=0.,help='Tool yaw in radians')
     p.add_argument('--grip-open',type=float,default=.04);p.add_argument('--grip-closed',type=float,default=.02)
-    p.add_argument('--soft-asset', choices=('block','duck'), default='block')
+    p.add_argument('--soft-asset', choices=('block','duck','rigid_cloth'), default='block')
     p.add_argument('--reference', action='store_true')
     p.add_argument('--window', action='store_true')
     p.add_argument('--diagnose', action='store_true', help='Record the first physical-step line searches without changing them')
     p.add_argument('--neural-graphs',action='store_true',help='Replay pure attention blocks on CUDA; physical steps and geometry remain eager')
     p.add_argument('--neural-precision',choices=('fp32','bf16'),default='fp32',help='Optional inference arithmetic inside the neural response only')
     p.add_argument('--compact-diagnostics',action='store_true',help='Omit per-component ray-scaling lists; preserve all numerical checks and acceptance rules')
+    p.add_argument('--profile',action='store_true',help='Bounded CPU call statistics and neural/solver stream intervals; not a speed benchmark')
+    p.add_argument('--exhaustive-line-search',action='store_true',help='Diagnostic reference: evaluate smaller rays even after all groups accept')
     a = p.parse_args()
+    if a.soft_asset=='rigid_cloth' and (a.material_mu is not None or a.material_lambda is not None or a.grasp_yaw!=0.):
+        p.error('Rigid/cloth scenes use authored cloth coefficients and a fixed tool orientation')
+    if not math.isfinite(a.place_height) or not .2<=a.place_height<=.335:p.error('Place height must be in [0.2, 0.335] m')
+    if a.resume_recording and (a.soft_asset!='rigid_cloth' or a.reference or a.start_time!=0.):
+        p.error('Model-frame continuation requires rigid/cloth model mode with the original zero command origin')
+    newton_provenance = source_record()
     if a.frames<1 or a.substeps<1: p.error('Positive frames/substeps required')
+    if not math.isfinite(a.gpu_memory_gib) or a.gpu_memory_gib<=2:
+        p.error('GPU budget must be finite and exceed the two GiB native reserve')
     if not 0<=a.start_time<=4 or not 0<a.motion_budget<float('inf'):
         p.error('Start time must be between zero and four seconds, with a finite positive motion budget')
     if any(value is not None and not 0<value<float('inf') for value in (a.material_mu,a.material_lambda,a.arm_drive_ke,a.joint_linear_ke,a.joint_angular_ke)):
@@ -94,14 +110,17 @@ def main():
     import newton.viewer
     # GitPython is needed even for cached Newton assets. Keep root binary
     # packages first, appending only the existing Newton environment.
-    sys.path.append('/home/oem/code/engine/newton/.venv/lib/python3.12/site-packages')
+    sys.path.append(str(NEWTON_ROOT/'.venv/lib/python3.12/site-packages'))
     from wp_vbd.franka_vbd_scene import build, controller
+    if a.soft_asset=='rigid_cloth':
+        if a.reference:p.error('The rigid/cloth recording entry is model-only')
+        from wp_vbd.franka_rigid_cloth_scene import build, controller
     from wp_vbd.surface_joint_scene import export_model
     from wp_vbd.surface_joint_runtime import SurfaceJointExampleSolver
     from wp_vbd.mixed_solver import MixedSolver
     from wp_vbd.gpu_budget import GpuBudget
     torch.set_num_threads(1); torch.use_deterministic_algorithms(True)
-    budget = GpuBudget(a.device, 18.)
+    budget = GpuBudget(a.device, a.gpu_memory_gib)
     wp.config.kernel_cache_dir = str(ROOT/'.local/p0/warp-cache')
     wp.init(); wp.set_device(a.device)
     if a.device.startswith('cuda'): wp.set_stream(wp.stream_from_torch(torch.cuda.current_stream()))
@@ -126,7 +145,7 @@ def main():
     begin = time.perf_counter(); e = build(wp, newton, device=a.device, soft_asset=a.soft_asset, substeps=a.substeps, start_time=a.start_time,
                                            material_mu=a.material_mu,material_lambda=a.material_lambda,arm_drive_ke=a.arm_drive_ke,
                                            grasp_x=a.grasp_x,grasp_yaw=a.grasp_yaw,grip_open=a.grip_open,grip_closed=a.grip_closed,friction=a.friction,
-                                           grasp_height=a.grasp_height)
+                                           grasp_height=a.grasp_height,place_height=a.place_height)
     if a.contact_mode!='full':
         flags=e.model.shape_flags.numpy()
         mask=int(newton.ShapeFlags.COLLIDE_PARTICLES)
@@ -139,7 +158,7 @@ def main():
         if hashlib.sha256(payload).hexdigest()!=expected:raise RuntimeError('Implementation changed while freezing this run')
         target=a.output/'implementation_snapshot'/relative;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(payload)
     (a.output/'implementation_snapshot_manifest.json').write_text(json.dumps(implementation,indent=2)+'\n')
-    checkpoint_sha = None; checkpoint_step = None; reference_adaptation = None; precision = None
+    checkpoint_sha = None; checkpoint_step = None; reference_adaptation = None; precision = None; resume = None
     from wp_vbd.neural_cuda_graph import enable_attention_replay,attention_replay_report
     if a.reference:
         if a.reference_mimic_relaxation!=1. or a.reference_mimic_final_only:
@@ -151,25 +170,78 @@ def main():
         scene = None; network = None
     else:
         checkpoint_sha = hashlib.sha256(a.checkpoint.read_bytes()).hexdigest()
-        stored = torch.load(a.checkpoint, map_location=a.device, weights_only=True)
+        stored = torch.load(a.checkpoint, map_location='cpu', weights_only=True)
         checkpoint_step = stored['step']
         model_config = stored['model_config'] if 'model_config' in stored else stored['config']['model']
         network = MixedSolver(model_config).to(a.device).eval()
         network.load_state_dict(stored['model'])
+        if a.resume_recording:
+            previous=json.loads((a.resume_recording/'run.json').read_text())
+            if previous['status']=='RUNNING':raise ValueError('A live model recording cannot be restored')
+            if previous['mode']!='shared_network_inference' or previous['scene']!='research.franka_vbd_rigid_cloth' or previous['initial_command_time']!=0.:
+                raise ValueError('A model-produced rigid/cloth prefix with the same command origin is required')
+            if previous['checkpoint_sha256']!=checkpoint_sha or previous['newton_source']!=newton_provenance or previous['physical_dt']!=e.sim_dt:
+                raise ValueError('Model weights, Newton source and physical timestep must match the prefix')
+            if any(previous['forbidden_solver_calls'].values()) or previous['teacher_trajectory_reads']:
+                raise ValueError('Teacher/native-solver recordings are not model continuation inputs')
+            expected={'arm_drive_ke':a.arm_drive_ke,'joint_linear_ke':a.joint_linear_ke,'joint_angular_ke':a.joint_angular_ke,
+                      'friction_override':a.friction,'grip_open':a.grip_open,'grip_closed':a.grip_closed,'grasp_height':a.grasp_height}
+            if any(previous['physical_parameters'][key]!=value for key,value in expected.items()):
+                raise ValueError('Model continuation cannot change physical parameters')
+            if (previous['articulation_modes']!=a.articulation_modes or previous['separate_coarse_step']!=a.separate_coarse_step or
+                previous['solver_parameters']['soft_tangent_support_scale']!=a.tangent_support_scale or
+                previous['solver_parameters']['force_aware_material_anticipation']!=a.force_aware_anticipation):
+                raise ValueError('Model continuation requires the same physical response settings')
+            with np.load(a.resume_recording/'trajectory.npz') as archive:
+                tape={key:archive[key].copy() for key in archive.files}
+            count=previous['frames_completed']
+            if not 0<count<a.frames or len(tape['physical_time'])<count+1 or not np.allclose(tape['physical_time'][:count+1],np.arange(count+1)*e.frame_dt,rtol=0,atol=1e-10):
+                raise ValueError('A nonempty, frame-aligned accepted prefix shorter than the requested timeline is required')
+            # Failure diagnostics may append an accepted partial frame.
+            # Restore the last complete frame and replay the incomplete
+            # interval from its own model state, never from teacher data.
+            for key in ('physical_time','particle_position','particle_velocity','body_pose','body_velocity','joint_position','joint_target'):
+                tape[key]=tape[key][:count+1]
+            if not np.array_equal(tape['particle_rest'],e.model.particle_q.numpy()) or not np.array_equal(tape['faces'],e.model.tri_indices.numpy()):
+                raise ValueError('Rest assets/topology must match the model recording')
+            for field,key in (('particle_q','particle_position'),('particle_qd','particle_velocity'),('body_q','body_pose'),('body_qd','body_velocity')):
+                value=tape[key][-1]
+                if not np.isfinite(value).all():raise ValueError('Nonfinite model continuation state')
+                getattr(e.state_0,field).assign(value)
+            wp.to_torch(e.helper.ik_joint_q)[0,:9].copy_(torch.as_tensor(tape['joint_target'][-1,:9],device=a.device))
+            e.control.joint_target_q.assign(tape['joint_target'][-1])
+            resume={'report':previous,'tape':tape,'frames':count,
+                    'provenance':{'recording':str(a.resume_recording.resolve()),
+                      'trajectory_sha256':hashlib.sha256((a.resume_recording/'trajectory.npz').read_bytes()).hexdigest(),
+                      'source_manifest_sha256':hashlib.sha256((a.resume_recording/'implementation_snapshot_manifest.json').read_bytes()).hexdigest(),
+                      'accepted_frame_prefix':count,'accepted_physical_seconds':count*e.frame_dt,
+                      'ignored_incomplete_substeps':previous['physical_substeps']-count*a.substeps,
+                      'teacher_trajectory_reads':0,
+                      'history_policy':'Static pins retained; joint winding reinitialized from this accepted model pose within the original branch. No contact dual history persists across physical steps.',
+                      'controller_place_height_m':a.place_height}}
         if a.neural_graphs:enable_attention_replay(network)
         from wp_vbd.neural_precision import NeuralPrecision
         precision=NeuralPrecision(network.protected_response,a.neural_precision,a.device)
         scene = export_model(e.model, configuration, 'research.franka_vbd_'+a.soft_asset, newton, e.sim_dt, a.device)
         scene.metadata['detection_motion_budget']=a.motion_budget
+        scene.metadata['evaluate_all_line_search_rays']=a.exhaustive_line_search
         if a.compact_diagnostics:scene.metadata['compact_numerical_diagnostics']=True
         scene.metadata['bounded_motion_forecast_target_only']=True
         if a.articulation_modes:scene.metadata['joint_tree_coarse_modes']='scalar_tree_twelve_columns_v307'
         if a.separate_coarse_step:scene.metadata['separate_coarse_ray_step']=True
         if a.material_motion_modes:scene.metadata['articulation_material_motion_modes']=True
+        if a.soft_asset=='rigid_cloth':
+            if not a.articulation_modes:p.error('Rigid/cloth scenes require --articulation-modes')
+            scene.metadata['independent_object_motion_modes']=True
         scene.metadata['soft_tangent_support_scale']=a.tangent_support_scale
         scene.metadata['record_grasp_forces']=True
         if a.force_aware_anticipation:scene.metadata['force_aware_material_anticipation']=True
         solver = SurfaceJointExampleSolver(network, scene, e.sim_dt, wp, newton, e.model, e.state_0)
+        if resume:
+            if bool((scene.rest_x[scene.fixed_particle_ids]-solver.read(e.state_0).x[0,scene.fixed_particle_ids]).abs().max()>1e-8):
+                raise ValueError('Model-frame continuation admits unchanged static cloth clamps only')
+            solver.history['pin_initialized'].fill_(True)
+            solver.steps=resume['frames']*a.substeps
     if a.diagnose and network:
         from wp_vbd import rigid_contact_solver as algorithm, surface_joint_system as physics
         from wp_vbd.mimic_constraint import rows as mimic_rows
@@ -250,7 +322,8 @@ def main():
         mimic_coefficients=wp.to_torch(e.model.joint_mimic_coeffs)[followers].double()
     q_readout=wp.empty_like(e.model.joint_q);qd_readout=wp.empty_like(e.model.joint_qd)
     force_peaks={'upward_friction_n':0.,'coulomb_capacity_n':0.,'coulomb_ratio':0.}
-    max_contacts={'rigid':0,'soft':0}; nn_calls=0
+    max_contacts=resume['report']['max_contact_counts'].copy() if resume else {'rigid':0,'soft':0}
+    nn_calls=resume['report']['nn_backbone_calls'] if resume else 0
     if network:
         def count_nn(*unused):
             nonlocal nn_calls
@@ -263,7 +336,15 @@ def main():
         joint_positions.append(q_readout.numpy().copy());joint_targets.append(e.control.joint_target_q.numpy().copy())
         particle_velocities.append(e.state_0.particle_qd.numpy().copy())
         body_velocities.append(e.state_0.body_qd.numpy().copy())
-    record(); initial_particle=particle[0].copy(); initial_body=body[0].copy()
+    if resume:
+        tape=resume['tape'];frames=resume['frames'];steps=frames*a.substeps
+        for target,key in ((particle,'particle_position'),(body,'body_pose'),(times,'physical_time'),
+                           (particle_velocities,'particle_velocity'),(body_velocities,'body_velocity'),
+                           (joint_positions,'joint_position'),(joint_targets,'joint_target')):
+            target.extend(tape[key])
+        phases.extend(tape['phase'][:frames])
+    else:record()
+    initial_particle=particle[0].copy(); initial_body=body[0].copy()
     run_start=time.perf_counter()
     def write(status):
         out={'status':status,'mode':'offline_vbd_reference' if a.reference else 'shared_network_inference',
@@ -274,6 +355,7 @@ def main():
              'separate_coarse_step':a.separate_coarse_step,
              'material_motion_modes':a.material_motion_modes,
              'solver_parameters':{'soft_tangent_support_scale':a.tangent_support_scale,
+                  'evaluate_all_line_search_rays':a.exhaustive_line_search,
                   'force_aware_material_anticipation':a.force_aware_anticipation,
                   'model_unroll':network.config.get('unroll') if network else None,
                   'offline_reference_iterations':a.reference_iterations if a.reference else None,
@@ -292,8 +374,9 @@ def main():
              'source_static_sha256':static_sha,'native_substep_audit':native_audit if a.reference else None,
              'solver_configuration':configuration,
              'initial_command_time':a.start_time,'independent_undeformed_soft_initialization':True,
+             'model_recording_continuation':resume['provenance'] if resume else None,
              'requested_window_completed':frames==a.frames,
-             'full_authored_timeline_recorded':frames==a.frames and a.start_time==0 and steps*e.sim_dt>=4.-1e-9,
+             'full_authored_timeline_recorded':frames==a.frames and a.start_time==0 and steps*e.sim_dt>=(6.4 if a.soft_asset=='rigid_cloth' else 4.)-1e-9,
              'detection_motion_budget':a.motion_budget if network else None,
              'frames_completed':frames,'frames_requested':a.frames,'physical_substeps':steps,'physical_seconds':steps*e.sim_dt,
              'particle_count':e.model.particle_count,'tet_count':e.model.tet_count,'body_count':e.model.body_count,'joint_count':e.model.joint_count,
@@ -303,15 +386,17 @@ def main():
              'adapted_mimic_projection_calls':reference_adaptation.calls if reference_adaptation else 0,
              'adapted_mimic_projection_opportunities':reference_adaptation.opportunities if reference_adaptation else 0,
              'initial_joint_positions':e.model.joint_q.numpy().tolist(),
-             'physical_parameters':{'tet_material':e.model.tet_materials.numpy()[0].tolist(),
+             'physical_parameters':{'tet_material':e.model.tet_materials.numpy()[0].tolist() if e.model.tet_count else None,
+                  'cloth_triangle_material':e.model.tri_materials.numpy()[0].tolist() if a.soft_asset=='rigid_cloth' else None,
+                  'payload_body_id':getattr(e,'payload_id',None),
                   'arm_drive_ke':a.arm_drive_ke,'soft_contact_ke':e.model.soft_contact_ke,'soft_contact_kd':e.model.soft_contact_kd,
                   'joint_linear_ke':a.joint_linear_ke,'joint_angular_ke':a.joint_angular_ke,
                   'grasp_x':a.grasp_x,'grasp_yaw':a.grasp_yaw,'grasp_height':a.grasp_height,'grip_open':a.grip_open,'grip_closed':a.grip_closed,
                   'friction_override':a.friction,
                   'soft_contact_mu':e.model.soft_contact_mu,'shape_friction':e.model.shape_material_mu.numpy().tolist()},
-             'implementation_sha256':implementation,
+             'implementation_sha256':implementation,'newton_source':newton_provenance,
              'max_contact_counts':max_contacts,'nn_backbone_calls':nn_calls,'failure':failure,
-             'wall_seconds':time.perf_counter()-run_start,'gpu_budget':budget.report(),
+             'wall_seconds':time.perf_counter()-run_start+(resume['report']['wall_seconds'] if resume else 0.),'gpu_budget':budget.report(),
              'scope':'New dynamic grasp test; original URDF/inertia/collision geometry, native per-configuration mesh force filtering, low-resolution elastic block or original duck. IK produces drive targets only. No trained-demo or realtime claim.'}
         if network and solver.last_diagnostic:
             out['last_diagnostic']={k:(v.detach().cpu().tolist() if isinstance(v,torch.Tensor) else v) for k,v in solver.last_diagnostic.items() if k not in ('iterations','rejected_physical_step','contact_repair_supervision')}
@@ -319,7 +404,7 @@ def main():
         if particle:
             out['soft_center_lift_m']=float((particle[-1]-initial_particle).mean(0)[2])
             out['body_origin_max_motion_m']=float(np.linalg.norm(body[-1][:,:3]-initial_body[:,:3],axis=-1).max())
-            tet=e.model.tet_indices.numpy()
+            tet=e.model.tet_indices.numpy() if e.model.tet_count else np.empty((0,4),dtype=np.int32)
             if len(tet):
                 def determinants(position):
                     points=position[tet]
@@ -333,13 +418,37 @@ def main():
             point=tool[:3]+offset+2*np.cross(q[:3],np.cross(q[:3],offset)+q[3]*offset)
             target_z,_,_=command(a.start_time+max(0,frames-1)*e.frame_dt,grasp_height=a.grasp_height)
             target=np.array([a.grasp_x,-.5,target_z])
+            if a.soft_asset=='rigid_cloth':
+                from wp_vbd.franka_rigid_cloth_scene import command as place_command
+                target,_,_=place_command(a.start_time+max(0,frames-1)*e.frame_dt,
+                                         grasp_height=a.grasp_height,grip_open=a.grip_open,grip_closed=a.grip_closed,place_height=a.place_height)
+                payload=np.asarray(body)[:,e.payload_id,:3]
+                out['payload_initial_position']=payload[0].tolist()
+                out['payload_position']=payload[-1].tolist()
+                out['payload_max_lift_m']=float(payload[:,2].max()-payload[0,2])
+                out['payload_lateral_travel_m']=float(payload[-1,0]-payload[0,0])
+                out['physical_parameters']['grasp_x']=-.12
+                out['physical_parameters']['cloth_clamps']='four boundary edges'
+                out['physical_parameters']['cloth_height_m']=.235
+                out['physical_parameters']['place_x_m']=.14
+                out['physical_parameters']['place_height_m']=a.place_height
+                out['physical_parameters']['payload_size_m']=[.05,.05,.05]
+                out['physical_parameters']['payload_mass_kg']=float(e.model.body_mass.numpy()[e.payload_id])
+                out['scope']='Authored FR3/free rigid/cloth scene. Shared network and physical response on the selected device; IK controls robot drives only. No payload attachment or teacher trajectory.'
             out.update(actual_tool_position=point.tolist(),commanded_tool_position=target.tolist(),
                        tool_position_error_m=float(np.linalg.norm(point-target)))
-        report_path.write_text(json.dumps(out,indent=2,default=str)+'\n')
+        temporary=report_path.with_suffix('.tmp')
+        temporary.write_text(json.dumps(out,indent=2,default=str)+'\n')
+        temporary.replace(report_path)
     write('RUNNING')
+    profiler=None
+    if a.profile:
+        from wp_vbd.execution_profile import ExecutionProfile
+        profiler=ExecutionProfile(network.protected_response if network else None,a.device,a.output/'operator_profile.json')
+        profiler.start()
     try:
         with torch.no_grad():
-            for frame in range(a.frames):
+            for frame in range(frames,a.frames):
                 phase=controller(e,a.start_time+frame*e.frame_dt,wp)
                 if not a.reference_record_substeps:phases.append(phase)
                 for sub in range(e.sim_substeps):
@@ -355,7 +464,8 @@ def main():
                             if not bool(torch.isfinite(wp.to_torch(getattr(e.state_1,name))).all()):
                                 raise FloatingPointError(f'Offline VBD baseline produced nonfinite {name} at substep {steps}')
                     else:
-                        solver.step(e.state_0,e.state_1,e.control,None,e.sim_dt)
+                        with profiler.measure('wp.solver_step') if profiler else nullcontext():
+                            solver.step(e.state_0,e.state_1,e.control,None,e.sim_dt)
                         precision.verify_physical_boundary()
                         c=scene.candidates
                         d=solver.last_diagnostic
@@ -399,6 +509,7 @@ def main():
             max_contacts['soft']=max(max_contacts['soft'],len(scene.candidates.soft.shape))
         if steps*e.sim_dt>times[-1]+1e-12: record()
     finally:
+        if profiler:profiler.finish()
         budget.observe(force=True)
         if viewer:viewer.close()
         np.savez_compressed(a.output/'trajectory.npz',particle_position=np.asarray(particle),body_pose=np.asarray(body),
@@ -407,7 +518,7 @@ def main():
                             particle_velocity=np.asarray(particle_velocities),body_velocity=np.asarray(body_velocities),
                             input_joint_target_raw=np.asarray(input_targets),input_joint_rate_raw=np.asarray(input_rates),
                             input_joint_effort_raw=np.asarray(input_efforts),
-                            tets=e.model.tet_indices.numpy(),particle_rest=initial_particle)
+                            tets=e.model.tet_indices.numpy() if e.model.tet_count else np.empty((0,4),dtype=np.int32),particle_rest=initial_particle)
         if network:
             final={name:getattr(e.state_0,name).numpy().copy() for name in ('particle_q','particle_qd','body_q','body_qd')}
             final.update({'history__'+name:value.detach().cpu().numpy() for name,value in solver.history.items()})

@@ -15,6 +15,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device',choices=('cpu','cuda:0'),default='cpu')
     parser.add_argument('--checkpoint',type=Path,default=ROOT/'checkpoints/shared_normal_648_v84/shared_strict.pt')
+    parser.add_argument('--neural-precision',choices=('fp32','bf16'),default='fp32')
     parser.add_argument('--report',type=Path,required=True)
     args=parser.parse_args()
     if args.report.exists():raise FileExistsError(args.report)
@@ -22,6 +23,7 @@ def main():
     from wp_vbd.gpu_budget import GpuBudget
     from wp_vbd.heterogeneous_backbone import AttentionBlock
     from wp_vbd.neural_cuda_graph import enable_attention_replay,attention_replay_report
+    from wp_vbd.neural_precision import NeuralPrecision
     torch.set_num_threads(1);torch.manual_seed(89);torch.use_deterministic_algorithms(True)
     budget=GpuBudget(args.device)
     raw=args.checkpoint.read_bytes();checkpoint_sha=hashlib.sha256(raw).hexdigest()
@@ -32,10 +34,16 @@ def main():
     prefix='protected_response.hierarchy.encoder.0.'
     block.load_state_dict({name.removeprefix(prefix):value for name,value in stored['model'].items() if name.startswith(prefix)});del stored
     schema=list(block.state_dict());enable_attention_replay(block,maximum_entries=2)
+    precision=NeuralPrecision(block,args.neural_precision,args.device)
+    inference_precision=True
     maximum_difference=0.;snapshots=[];comparisons=0
     def compare(query,context,sizes):
         nonlocal maximum_difference,comparisons
-        reference=block._eager_attention(query,context,sizes);result=block(query,context,sizes)
+        with torch.autocast(query.device.type,dtype=torch.bfloat16,
+                            enabled=inference_precision and args.neural_precision=='bf16'):
+            reference=block._eager_attention(query,context,sizes)
+        result=block(query,context,sizes)
+        precision.verify_physical_boundary()
         difference=float((reference-result).abs().max());maximum_difference=max(maximum_difference,difference)
         torch.testing.assert_close(result,reference,rtol=2e-6,atol=2e-6)
         comparisons+=1
@@ -57,7 +65,13 @@ def main():
     replay=attention_replay_report(block)
     if args.device.startswith('cuda'):
         assert replay['captures']>=4 and replay['hits']>0 and replay['evictions']>=2,replay
-    before=replay['captures']
+    precision.close();inference_precision=False
+    # Reuse the same cache with FP32 after BF16. Policy changes must neither
+    # replay stale casts nor change training's eager full-precision path.
+    if args.neural_precision=='bf16':
+        with torch.no_grad():
+            for _ in range(4):compare(query,context,sizes)
+    before=attention_replay_report(block)['captures']
     query=query.detach().requires_grad_();context=context.detach().requires_grad_()
     reference=block._eager_attention(query,context,sizes);result=block(query,context,sizes)
     parameters=tuple(block.parameters());inputs=(query,context,*parameters)
@@ -76,6 +90,7 @@ def main():
             'autograd_bypass_maximum_gradient_difference':gradient_difference,
             'earlier_outputs_owned_and_unchanged':True,'state_dict_schema_unchanged':True,
             'replay':attention_replay_report(block),'gpu_resource_budget':budget.report(),
+            'neural_precision':precision.report(),
             'new_optimizer_updates':0,'physics_steps':0,'full_vbd_prediction_calls':0,
             'implementation_sha256':{name:hashlib.sha256((ROOT/'src/wp_vbd'/name).read_bytes()).hexdigest() for name in ('neural_cuda_graph.py','heterogeneous_backbone.py')},
             'scope':'Actual selected648 encoder block, changing inputs/shapes/multiplicities, current weight/head layout, bounded cache and autograd/training bypass. CPU does not exercise CUDA capture. No complete physics, native task, speedup or realtime claim.'}
