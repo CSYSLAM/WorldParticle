@@ -52,12 +52,20 @@ def main():
     residual=torch.randn_like(residual)*scene.dof
     old=tree.augment(scene,start,base,metric,residual)
     assert max(z.shape[-1] for _,z,*_ in old.blocks)<=12
+    widened_legacy_rejected=False
+    try:tree.augment(scene,start,base,metric,residual,maximum_extra=8)
+    except ValueError:widened_legacy_rejected=True
+    assert widened_legacy_rejected
     scene.metadata['independent_object_motion_modes']=True
     new=tree.augment(scene,start,base,metric,residual)
     projection=ProtectedCoarse(scene,metric,new.blocks,maximum_columns=18)
     assert bool(projection.valid.all())
     chosen=next(z for ports,z,*_ in new.blocks if payload in ports.ids.tolist() and 40 in ports.ids.tolist())
     assert chosen.shape[-1]==18,chosen.shape
+    widened=tree.augment(scene,start,base,metric,residual,maximum_extra=8)
+    widened_block=next(z for ports,z,*_ in widened.blocks if payload in ports.ids.tolist() and 40 in ports.ids.tolist())
+    assert torch.equal(widened_block,chosen)
+    assert all(z.shape[-1]<=18 for _,z,*_ in widened.blocks)
     assert not bool(projection(torch.zeros_like(residual)).any())
     u=torch.randn_like(residual)*scene.dof;v=torch.randn_like(residual)*scene.dof
     symmetry=abs(float((u*projection(v)).sum()-(v*projection(u)).sum()))
@@ -86,6 +94,8 @@ def main():
             'zero_residual_preserved':True,'old_twelve_column_path_preserved':True,
             'free_payload_has_independent_directions':True,'selection':scene.articulation_coarse_diagnostic,
             'component_batch_dispatch_honors_eighteen_column_budget':True,
+            'eight_tree_request_with_two_objects_preserves_six_tree_columns':True,
+            'eight_tree_request_without_independent_object_path_rejected':widened_legacy_rejected,
             'vbd_calls':0,'featherstone_calls':0,'new_network_parameters':0}
     a.report.parent.mkdir(parents=True,exist_ok=True)
     a.report.write_text(json.dumps(report,indent=2)+'\n');print(a.report.read_text())

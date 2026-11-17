@@ -6,6 +6,8 @@ addition to the existing six rigid columns. No target poses are assigned,
 no dynamics solver is called. The default budget is twelve columns. The
 explicit independent-object path admits two free objects plus tree modes
 within eighteen columns, without changing the learned architecture.
+That path can request eight tree columns when space permits; the combined
+eighteen-column budget still limits the selection for each interaction.
 """
 from types import SimpleNamespace
 
@@ -120,8 +122,12 @@ def raw_modes(scene, state):
     return raw*scene.dof[None,:,:,None]
 
 
-def augment(scene, state, base, metric, residual, *, maximum_extra=6):
-    if not 1<=maximum_extra<=6:raise ValueError('At most six extra tree columns fit the declared twelve-column budget')
+def augment(scene, state, base, metric, residual, *, maximum_extra=None):
+    independent=bool(scene.metadata.get('independent_object_motion_modes'))
+    if maximum_extra is None:maximum_extra=scene.metadata.get('joint_tree_extra_columns',6)
+    limit=8 if independent else 6
+    if not isinstance(maximum_extra,int) or not 1<=maximum_extra<=limit:
+        raise ValueError(f'Joint-tree extra-column budget must be an integer in 1..{limit}')
     with torch.no_grad():
         modes = raw_modes(scene, state)
         if not modes.shape[-1]:return base
@@ -169,7 +175,11 @@ def augment(scene, state, base, metric, residual, *, maximum_extra=6):
             curvature = (modes[:,ids]*image[:,ids]).sum((1,2))
             valid = torch.isfinite(gradient) & torch.isfinite(curvature) & (curvature>0)
             score = torch.where(valid, gradient.square()/curvature.clamp_min(1e-300), 0.).amax(0)
-            order = torch.argsort(score, descending=True, stable=True)[:maximum_extra]
+            # Two 7-axis arms with mimic grippers each need eight tree
+            # coordinates. Keep every block inside the existing embedding;
+            # two free objects still leave room for only six tree columns.
+            extra=min(maximum_extra,(18 if independent else 12)-rigid.shape[-1])
+            order = torch.argsort(score, descending=True, stable=True)[:extra]
             order = order[score[order]>0]
             addition = modes[:,ids][:,:,:,order]
             blocks.append((ports, torch.cat((rigid, addition),-1), *tail))

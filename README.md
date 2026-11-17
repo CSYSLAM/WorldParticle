@@ -21,6 +21,7 @@
 | `scripts/run_native_asset_live.py` | 输入资产 JSON、物理参数和权重，打开 Newton 窗口 |
 | `scripts/run_official_live.py` | 官方 demo 的共享模型推理入口 |
 | `scripts/run_franka_soft_grasp.py` | 自建单求解器 Franka + 软块场景 |
+| `scripts/run_w1_dual_grasp.py`、`render_w1_dual_grasp.py` | W1 左手刚体、右爪软体的共享模型抓取与三视角渲染 |
 | `scripts/run_franka_rigid_cloth.py` | Franka 抓取自由刚体并放到布面，支持 GPU / CPU 和窗口 |
 | `scripts/render_franka_model_video.py`、`verify_franka_video.py` | 双视角离线渲染、完整解码与动作阶段检查 |
 | `scripts/collect_*.py`、`prepare_*.py` | 离线 VBD 采集、数据转换和资格检查 |
@@ -65,6 +66,17 @@ python scripts/review_franka_recording.py \
 python scripts/verify_franka_video.py \
   --video outputs/rigid_cloth.mp4 --report outputs/rigid_cloth_video.json
 ```
+
+W1 双臂轻量场景保留外部机器人的视觉网格和惯量，固定躯干并简化碰撞。每臂 7 个转动关节和夹爪通过关节目标驱动；两个物体保持自由动态。详见 [W1 场景说明](docs/w1_dual_grasp.md)。需要自行准备 `w1-030/robot.urdf` 及其网格，机器人资产不随代码上传。
+
+```bash
+python scripts/run_w1_dual_grasp.py --asset /path/to/w1-030 \
+  --checkpoint /path/to/checkpoint.pt --output outputs/w1_dual --window
+python scripts/render_w1_dual_grasp.py \
+  --recording outputs/w1_dual --output outputs/w1_dual.mp4
+```
+
+step 156 权重已完成该场景的 1.4 秒闭爪、抬升、保持过程，两物体实际抬升均约 3.6 cm，保存帧未出现四面体翻转。每个交互可在原有 18 列保护空间内请求最多 8 个关节树方向；两个自由物体同组时收缩到最多 6 列，总预算保持 18。默认其他场景仍使用 6 列，网络参数不增加。当前推理仍慢于实时。
 
 运行输出不得重复使用已有结果目录。长任务可通过 `run_franka_vbd_shared.py --resume-recording` 从自身已接受的完整模型帧继续；续算检查权重、Newton 版本、资产、时间步和物理参数，并记录来源，不使用教师状态替换推理状态。
 
