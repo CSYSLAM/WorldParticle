@@ -13,5 +13,7 @@ The Apache 2.0 license text is included in
 [LICENSES/Apache-2.0.txt](../LICENSES/Apache-2.0.txt).
 
 Newton is a separately installed dependency. The external W1 robot URDF and
-meshes, Newton source checkout, trained weights and generated trajectories are
-not included in this source publication.
+meshes, Newton source checkout and generated trajectories are not included.
+The explicitly published step 156 research checkpoint is stored in parts on the separate
+`models/shared-vbd-step156-20261117` branch; its configuration and downloader
+are in `model_releases/shared_vbd_step156/`.

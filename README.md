@@ -33,7 +33,7 @@
 | `scripts/verify_*.py`、`tests/reference_v310/` | 相关物理、梯度及实现对照检查 |
 | `assets/live/`、`configs/` | 小型静态资产、范围清单和模型配置 |
 
-本分支只包含源码、配置和必要说明，**不包含权重、训练数据、运行日志、视频或实验报告**。因此，下列命令需要本地准备相应权重和资产，不能仅凭克隆源码复现已有检查点。
+本分支包含源码、配置和必要说明，并在独立模型分支提供[一版 step 156 完整模型快照](model_releases/shared_vbd_step156/README.md)，含权重、优化器与 RNG。**不包含训练数据、机器人外部资产、运行日志或视频**。克隆代码时使用 `--single-branch`，需要权重时运行 `python scripts/fetch_model_snapshot.py` 与 `python scripts/verify_model_snapshot.py`；以下命令的权重路径可替换为 `model_releases/shared_vbd_step156/model.pt`，资产仍需另行准备。
 
 ```bash
 # 默认从接近抓取的位置开始，h=1/600；GPU 网络与物理更新

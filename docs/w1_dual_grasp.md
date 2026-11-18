@@ -2,7 +2,7 @@
 
 使用外部资产 `~/下载/assets/w1-030/robot.urdf`，左手夹黄色刚体，右手夹蓝色软体。机器人从物体两侧开始，闭爪、抬升、保持。控制器只发送关节目标；双臂、手指和两个物体的运动均由共享网络推理路径推进。
 
-在已有 Torch、Warp 和固定版本 Newton 环境中，运行 `python -m pip install -r requirements-vbd-assets.txt` 补齐资产、IK 与视频依赖。权重和机器人网格需另行准备。
+在已有 Torch、Warp 和固定版本 Newton 环境中，运行 `python -m pip install -r requirements-vbd-assets.txt` 补齐资产、IK 与视频依赖。[step 156 权重](../model_releases/shared_vbd_step156/README.md)通过下载脚本获取；机器人网格需另行准备。
 
 ```bash
 cd /home/oem/code/worldparticle

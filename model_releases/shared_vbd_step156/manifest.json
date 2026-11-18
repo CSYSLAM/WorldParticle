@@ -1,0 +1,140 @@
+{
+  "schema": "wp_shared_model_snapshot_v1",
+  "architecture": "shared_constitutive_v21",
+  "model_class": "wp_vbd.mixed_solver.MixedSolver",
+  "active_neural_parameters": 46882811,
+  "checkpoint": {
+    "file": "model.pt",
+    "bytes": 563351308,
+    "sha256": "6e3305a4e464126857b27262dc08c88fa00110f868c4a03113bdd1c8fe70ab68",
+    "step": 156,
+    "format": "torch.save full research checkpoint",
+    "optimizer_included": true,
+    "rng_included": true
+  },
+  "model_config_file": "model_config.json",
+  "code_base_commit": "96cb0b6aaa554f4e56e7e11215add2d38519558c",
+  "snapshot_tag": "shared-vbd-step156-20261117",
+  "source_branch": "research/shared-vbd-648-20261115",
+  "environment": {
+    "newton_commit": "25298aea1691e060c86f95e8d2b773c898c006d3",
+    "python": "3.12",
+    "torch": "2.7.1+cu128",
+    "warp": "1.17.0"
+  },
+  "training": {
+    "sampled_updates": 156,
+    "sampled_datasets": 70,
+    "official_pure_vbd_demos_sampled": 42,
+    "excluded_external_solver_demos": 9,
+    "data_manifest_sha256": "45a490e76d0a54cee9f9741436087c929a13797968c639515f82cfa298484195",
+    "initial_checkpoint_sha256": "1066ec5e5a895577c736caaeb81521212d9204a00502b95b94295f79a2baa0f0"
+  },
+  "qualification": "RESEARCH_SNAPSHOT_WITH_TASK_VALIDATION_NOT_ALL_DEMO_OR_CONVERGENCE_CERTIFIED",
+  "verified_tasks": [
+    "Franka soft-block grasp",
+    "Franka rigid pick and cloth placement",
+    "W1 cylinder and soft sphere grasp",
+    "W1 oblique flexible bag packing"
+  ],
+  "limitations": [
+    "Offline inference remains slower than realtime.",
+    "No demonstrated accuracy or speed advantage over native VBD.",
+    "No all-demo rollout, arbitrary-material generalization or continuous zero-penetration certification.",
+    "Robot assets and training datasets remain external.",
+    "Runtime numerical options and authored controllers are part of each demo configuration."
+  ],
+  "download": {
+    "storage": "ordinary_git_parts_on_separate_model_branch",
+    "reason": "GitHub rejects new LFS objects on this public fork",
+    "branch": "models/shared-vbd-step156-20261117",
+    "base_url": "https://raw.githubusercontent.com/CSYSLAM/WorldParticle/shared-vbd-step156-20261117/model_releases/shared_vbd_step156",
+    "parts": [
+      {
+        "file": "model.pt.part000",
+        "bytes": 33554432,
+        "sha256": "abc596d1742f7129999cb9d3645962a9826a07074035ac31dfff959beaa49744"
+      },
+      {
+        "file": "model.pt.part001",
+        "bytes": 33554432,
+        "sha256": "4a2af7674d0ee54c79e017bb004ce59178b83e4bab7a86e13b05e3f17b3a7bb3"
+      },
+      {
+        "file": "model.pt.part002",
+        "bytes": 33554432,
+        "sha256": "5d50d55156842323deb639dc504b636d25a9b70e166eb4ec4c69d9581bfa4339"
+      },
+      {
+        "file": "model.pt.part003",
+        "bytes": 33554432,
+        "sha256": "8b802f722900a379bb7ba50da09e13e8d7c57f14fb15ab7e9fbd80547e4795db"
+      },
+      {
+        "file": "model.pt.part004",
+        "bytes": 33554432,
+        "sha256": "ff863efc1e17f11ec9b92f898c3610574ac1848299e9d0c957dcc650d983fcf4"
+      },
+      {
+        "file": "model.pt.part005",
+        "bytes": 33554432,
+        "sha256": "f2d34e1708d40814c1ba62cde4dc7c73772d8c29d962a7abd3736396a61830e1"
+      },
+      {
+        "file": "model.pt.part006",
+        "bytes": 33554432,
+        "sha256": "cc396aa783c9384fb7a14610599c0a42a00114ea84c85fc6d6258c12ffbbb8f0"
+      },
+      {
+        "file": "model.pt.part007",
+        "bytes": 33554432,
+        "sha256": "60a75034adb6b4704a46c867a5237e6d8f02528e80e51da17cdf6e3cfc8d052c"
+      },
+      {
+        "file": "model.pt.part008",
+        "bytes": 33554432,
+        "sha256": "2d8914d0b7f7ebae4815b4d37c42d16f52ff621e5a3d99015634a7bb11473e55"
+      },
+      {
+        "file": "model.pt.part009",
+        "bytes": 33554432,
+        "sha256": "a74840bfaf7dd4636a10733359acc77fff9181d2f54b7deb3c51c4add7ac9d51"
+      },
+      {
+        "file": "model.pt.part010",
+        "bytes": 33554432,
+        "sha256": "fc801b3b2e18e067eeb3c229b7f4177cc7e3f682fab6b2ae84d6045524652e30"
+      },
+      {
+        "file": "model.pt.part011",
+        "bytes": 33554432,
+        "sha256": "8ba3b2a9d6e9c43d4e27f7e83307e2d9c225273e48f5326e7a112857d496dd81"
+      },
+      {
+        "file": "model.pt.part012",
+        "bytes": 33554432,
+        "sha256": "1f45112339b513ecf8b3e6ef45d9112a0021d83b9eac21c646ede5e704ea64e5"
+      },
+      {
+        "file": "model.pt.part013",
+        "bytes": 33554432,
+        "sha256": "7826c66c74b40375682d0f7f7c82f65a3a23848d3ad19cc3d94f20f695655227"
+      },
+      {
+        "file": "model.pt.part014",
+        "bytes": 33554432,
+        "sha256": "80aa95671ba624d2da3ecf51013723423de6cabd610add580a9404645aa9db9c"
+      },
+      {
+        "file": "model.pt.part015",
+        "bytes": 33554432,
+        "sha256": "f49ccf5e44507db6e642adc795903c71e87a89e09bf031446480999c67f8ad32"
+      },
+      {
+        "file": "model.pt.part016",
+        "bytes": 26480396,
+        "sha256": "4d3539f85f20cbf4365c6cad55e32bd5e0792814fd144ad5c923ce3f213acd21"
+      }
+    ]
+  }
+}
