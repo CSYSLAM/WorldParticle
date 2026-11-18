@@ -56,6 +56,20 @@ def main():
         assert not bool(scale_proposal(scene,NegativeMetric(),residual.detach(),raw)[1].all())
         nonfinite=residual.detach().clone();nonfinite[0,0,0]=float('nan')
         assert not bool(scale_proposal(scene,metric,nonfinite,raw)[1].all())
+        if dtype==torch.float64:
+            tiny=zero.clone();tiny[0,2,0]=1e-19
+            ascent=zero.clone();ascent[0,2,0]=1.
+            assert not bool(scale_proposal(scene,metric,ascent,tiny)[1].all())
+            scene.metadata={'repair_metric_ray_roundoff':True};scene.length=1.
+            repaired,good,repair_detail=scale_proposal(scene,metric,ascent,tiny)
+            assert bool(good.all()) and torch.equal(repaired,zero)
+            assert repair_detail[1]['roundoff_null_repaired']==[True]
+            resolved=tiny*1e13
+            assert not bool(scale_proposal(scene,metric,ascent,resolved)[1].all())
+            assert not bool(scale_proposal(scene,NegativeMetric(),ascent,tiny)[1].all())
+            assert not bool(scale_proposal(scene,metric,nonfinite,tiny)[1].all())
+            assert torch.equal(scale_proposal(scene,metric,residual.detach(),raw)[0],actual)
+            scene.metadata={}
         try:scale_proposal(scene,metric,raw[:,:-1],raw)
         except ValueError:pass
         else:raise AssertionError('Mismatched physical shapes accepted')

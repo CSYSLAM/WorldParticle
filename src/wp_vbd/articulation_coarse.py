@@ -130,7 +130,7 @@ def augment(scene, state, base, metric, residual, *, maximum_extra=None):
         raise ValueError(f'Joint-tree extra-column budget must be an integer in 1..{limit}')
     with torch.no_grad():
         modes = raw_modes(scene, state)
-        if not modes.shape[-1]:return base
+        if not modes.shape[-1] and not scene.metadata.get('elastic_shape_response',False):return base
         image = metric_action(metric, modes)
         blocks = []; selected = []
         for ports, rigid, *tail in base.blocks:
@@ -171,6 +171,10 @@ def augment(scene, state, base, metric, residual, *, maximum_extra=None):
                 value=rigid_component_modes(state.x[:,material],center,scene.dof[material]).to(rigid.dtype)
                 rigid=torch.zeros_like(rigid).index_copy(1,local,value)
                 base_space='material_rigid';material_id=int(groups[0])
+            shape_columns=modes.new_zeros(len(state.x),scene.n,6,0)
+            if scene.metadata.get('elastic_shape_response',False):
+                from .elastic_shape_modes import response_columns
+                shape_columns=response_columns(scene,state,metric,residual,ids)
             gradient = torch.einsum('bnip,bni->bp', modes[:,ids], residual[:,ids])
             curvature = (modes[:,ids]*image[:,ids]).sum((1,2))
             valid = torch.isfinite(gradient) & torch.isfinite(curvature) & (curvature>0)
@@ -178,14 +182,16 @@ def augment(scene, state, base, metric, residual, *, maximum_extra=None):
             # Two 7-axis arms with mimic grippers each need eight tree
             # coordinates. Keep every block inside the existing embedding;
             # two free objects still leave room for only six tree columns.
-            extra=min(maximum_extra,(18 if independent else 12)-rigid.shape[-1])
+            extra=min(maximum_extra,(18 if independent else 12)-rigid.shape[-1]-shape_columns.shape[-1])
+            if extra<0:raise ValueError('Elastic material columns exceed the declared coarse budget')
             order = torch.argsort(score, descending=True, stable=True)[:extra]
             order = order[score[order]>0]
             addition = modes[:,ids][:,:,:,order]
-            blocks.append((ports, torch.cat((rigid, addition),-1), *tail))
+            blocks.append((ports, torch.cat((rigid, addition,shape_columns[:,ids]),-1), *tail))
             selected.append({'joint_ids':[topology(scene).independent_joint_ids[i] for i in order.tolist()],
                              'estimated_physical_work':score[order].tolist(),
-                             'base_space':base_space,'material_object_id':material_id})
+                             'base_space':base_space,'material_object_id':material_id,
+                             'elastic_shape_columns':shape_columns.shape[-1]})
         scene.articulation_coarse_diagnostic = {'maximum_extra_columns':maximum_extra,
                                                'maximum_total_columns':18 if scene.metadata.get('independent_object_motion_modes') else 12,'maximum_candidate_columns':24,
                                                'maximum_scalar_tree_joints':64,'selected':selected}

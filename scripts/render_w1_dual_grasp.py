@@ -39,9 +39,11 @@ def main():
     torch.set_num_threads(1);wp.config.kernel_cache_dir=str(ROOT/'.local/p0/warp-cache');wp.init();wp.set_device('cpu')
     def forbidden(*args,**kwargs):raise AssertionError('Rendering must not execute dynamics')
     for cls in (newton.solvers.SolverVBD,newton.solvers.SolverFeatherstone):cls.__init__=forbidden;cls.step=forbidden
-    e=build(wp,newton,asset=run['asset'],output=a.recording/'render_asset',device='cpu',initialize_controls=False)
+    e=build(wp,newton,asset=run['asset'],output=a.recording/'render_asset',device='cpu',initialize_controls=False,
+            objects=run.get('objects','blocks'),friction=run.get('friction',1.5),release=run.get('release',False),style=run.get('style','overhead'),soft_lambda=run.get('soft_lame_lambda'))
     tape=a.recording/'trajectory.npz'
-    if not tape.exists() and a.snapshot_only:tape=a.recording/'initial_state.npz'
+    if not tape.exists() and a.snapshot_only:
+        tape=a.recording/('progress.npz' if (a.recording/'progress.npz').exists() else 'initial_state.npz')
     with np.load(tape) as z:
         bodies=z['body_pose'];particles=z['particle_position'];times=z['physical_time']
     if bodies.shape!=(len(times),e.model.body_count,7) or particles.shape!=(len(times),e.model.particle_count,3):
@@ -55,6 +57,17 @@ def main():
     cameras=[((2.1,-1.4,1.65),(.12,0.,.82),'W1 / overview'),
              ((.96,.28,1.13),(.40,.32,1.005),'Left / rigid'),
              ((.96,-.36,1.13),(.40,-.32,1.005),'Right / soft')]
+    if run.get('objects')=='cylinder_ball':
+        cameras=[(*cameras[0][:2],f'W1 / friction {run["friction"]:g}'),
+                 (*cameras[1][:2],'Left / rigid cylinder'),(*cameras[2][:2],'Right / soft ball')]
+    if run.get('style') in ('front','side'):
+        cameras=[((2.2,-1.6,1.9),(.15,0.,1.05),'W1 / horizontal front grasp'),
+                 ((.88,.63,1.32),(.43,.32,1.19),'Left / rigid cylinder'),
+                 ((.88,-.63,1.32),(.43,-.32,1.19),'Right / soft ball')]
+    if run.get('style')=='side':
+        cameras=[((2.2,-1.6,1.9),(.15,0.,1.05),'W1 / lateral pinch / no supports'),
+                 ((.90,.63,1.27),(.42,.32,1.15),'Left / rigid cylinder'),
+                 ((.90,-.63,1.27),(.42,-.32,1.15),'Right / soft ball')]
     def frame(index):
         e.state_0.body_q.assign(bodies[index]);e.state_0.particle_q.assign(particles[index])
         canvas=Image.new('RGB',(1920,900),(18,28,45));draw=ImageDraw.Draw(canvas)
@@ -67,8 +80,10 @@ def main():
             left=8 if j==0 else 968+(j-1)*472
             if j:panel=panel.crop((236,0,708,748))
             canvas.paste(panel,(left,95));draw.text((left+10,60),label,font=small,fill=(190,213,240))
-        _,_,phase=command(float(times[index]))
+        _,_,phase=command(float(times[index]),release=run.get('release',False),style=run.get('style','overhead'))
         scope='Geometry only' if preview else 'Full close / lift / hold' if run['full_authored_timeline_recorded'] else 'PARTIAL recording'
+        if run.get('release') and run['full_authored_timeline_recorded']:scope='Full grasp / lift / relax / fall'
+        if run.get('style') in ('front','side') and run['full_authored_timeline_recorded']:scope='Full reach / grasp / lift / draw back / hold'
         draw.text((20,855),f'Physical time {times[index]:.3f} s | {phase} | {scope} | 0.25x replay; not realtime',font=small,fill=(235,205,150))
         return np.asarray(canvas)
     a.output.parent.mkdir(parents=True,exist_ok=True)

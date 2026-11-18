@@ -4,6 +4,8 @@
 
 原 WorldParticle 的实现保留在 `models/`、`trajectory_model.py` 等文件中，原项目说明见 [原始实现说明](docs/ORIGINAL_WORLDPARTICLE.md)。跨类型共享求解属于本分支新增研究能力。
 
+当前能力与 Newton VBD 的差异、已经成立的价值及未验证的优势，见 [框架评估](docs/framework_assessment.md)。目前尚未建立相对 VBD 的速度或精度优势。
+
 ## 当前架构
 
 - 共享特征宽度 **648**，**12** 头注意力，**6** 层编码、**4** 层解码，FFN 宽度 **1296**。
@@ -21,7 +23,9 @@
 | `scripts/run_native_asset_live.py` | 输入资产 JSON、物理参数和权重，打开 Newton 窗口 |
 | `scripts/run_official_live.py` | 官方 demo 的共享模型推理入口 |
 | `scripts/run_franka_soft_grasp.py` | 自建单求解器 Franka + 软块场景 |
-| `scripts/run_w1_dual_grasp.py`、`render_w1_dual_grasp.py` | W1 左手刚体、右爪软体的共享模型抓取与三视角渲染 |
+| `scripts/run_w1_dual_grasp.py`、`render_w1_dual_grasp.py` | W1 刚体/软体抓取，含无垫块侧夹与三视角渲染 |
+| `scripts/run_w1_bag.py`、`render_w1_bag.py` | W1 斜夹柔性袋沿、右手装块、离线三视角渲染 |
+| `scripts/verify_w1_bag_recording.py`、`verify_w1_bag_clearance.py` | 实际袋壳内外点、接触采样和原始夹爪可视网格复核 |
 | `scripts/run_franka_rigid_cloth.py` | Franka 抓取自由刚体并放到布面，支持 GPU / CPU 和窗口 |
 | `scripts/render_franka_model_video.py`、`verify_franka_video.py` | 双视角离线渲染、完整解码与动作阶段检查 |
 | `scripts/collect_*.py`、`prepare_*.py` | 离线 VBD 采集、数据转换和资格检查 |
@@ -89,6 +93,8 @@ python scripts/prepare_franka_mixed_course.py \
   --dataset /path/to/qualified_franka_data.npz --output /path/to/new_course
 python scripts/run_franka_mixed_course.py --plan /path/to/new_course/launch_plan.json
 ```
+
+W1 纸袋任务使用同一 step 156 权重，完成 4.8 秒夹袋、抓块、装入、撤手及恢复。新版 `--bag-grip oblique` 从上方斜夹袋沿，保留真实袋壁变形；验收覆盖全部 289 个记录状态。袋子为 237 粒子、448 三角形的简化开口纸壳，无袋子自接触，不等同于原 MJVBDV2 场景。材料、数值支撑、弹性形变方向、分段续算和几何检查命令见 [W1 说明](docs/w1_dual_grasp.md)。当前单个长任务仍需离线计算；影片播放帧率不代表推理 FPS。
 
 ## 环境与外部源码
 

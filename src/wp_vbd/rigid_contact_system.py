@@ -19,6 +19,9 @@ def begin(scene,start,contacts,dt):
     delta=surface[:,:,1]-surface[:,:,0];normal=contacts.normal
     c0_t=-(delta-(delta*normal).sum(-1,keepdim=True)*normal)
     rho_n,rho_t=supports(scene,start,contacts,dt)
+    scale=float(scene.metadata.get('rigid_tangent_support_scale',1.))
+    if not math.isfinite(scale) or scale<=0:raise ValueError('Finite positive rigid tangential support scale required')
+    rho_t=rho_t*scale
     return SimpleNamespace(contacts=contacts,depth0=depth,c0_t=c0_t,rho_n=rho_n,rho_t=rho_t,dual_t=torch.zeros_like(delta),dt=dt)
 
 

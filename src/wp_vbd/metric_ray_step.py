@@ -26,6 +26,16 @@ def scale_proposal(scene, metric, residual, update):
             numerator=-(residual[:,ids]*update[:,ids]).sum((1,2))
             denominator=(update[:,ids]*image[:,ids]).sum((1,2))
             good=torch.isfinite(numerator)&torch.isfinite(denominator)&(numerator>=0)&(denominator>=0)
+            repaired=torch.zeros_like(good)
+            if getattr(scene,'metadata',{}).get('repair_metric_ray_roundoff',False) and update.dtype==torch.float64:
+                # A coarse direction that is analytically zero can retain
+                # signed projection roundoff. Discard only sub-resolution
+                # directions; the returned zero has exactly zero work and
+                # curvature. Resolved ascent and invalid metrics still fail.
+                normalized=torch.cat((update[:,ids,:3]/scene.length,update[:,ids,3:]),-1)
+                null=normalized.abs().amax((1,2))<=64*torch.finfo(update.dtype).eps
+                repaired=null&torch.isfinite(numerator)&torch.isfinite(denominator)&(numerator<0)&(denominator>=0)
+                good=good|repaired
             ratio=numerator/denominator.clamp_min(torch.finfo(update.dtype).tiny)
             scale=torch.where(denominator>0,ratio,1.).clamp(0.,1.)
             scale=torch.where(good,scale,0.)
@@ -36,4 +46,6 @@ def scale_proposal(scene, metric, residual, update):
                 details.append({'owners':len(ids),'linear_descent':numerator.cpu().tolist(),
                                 'metric_curvature':denominator.cpu().tolist(),'scale':scale.cpu().tolist(),
                                 'valid':good.cpu().tolist()})
+            if getattr(scene,'metadata',{}).get('repair_metric_ray_roundoff',False):
+                details[-1]['roundoff_null_repaired']=repaired.cpu().tolist()
     return update*scales[...,None],valid,details

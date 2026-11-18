@@ -20,6 +20,8 @@ class SurfaceJointCollisionOracle(MixedCollisionOracle):
 
 class SurfaceJointExampleSolver(MixedContactExampleSolver):
     def __init__(self, network, scene, dt, wp, newton, source_model, initial_native, *, learned=True):
+        self.native_roundoff_projection_count=0
+        self.maximum_native_position_correction=0.
         if scene.metadata.get('contract') != CONTRACT:
             raise ValueError('A complete surface/finite-joint scene is required')
         super().__init__(network, scene, dt, wp, newton, source_model, learned=learned, oracle_type=SurfaceJointCollisionOracle)
@@ -36,6 +38,17 @@ class SurfaceJointExampleSolver(MixedContactExampleSolver):
         for name in names:
             array = getattr(source_model, name, None)
             if array is not None: self.static_source[name] = wp.to_torch(array).clone()
+
+    def read(self, native):
+        state=super().read(native)
+        if self.scene.metadata.get('repair_native_mimic_roundoff',False):
+            from .native_mimic_roundoff import project
+            state,detail=project(self.scene,state)
+            if detail is not None:
+                self.native_roundoff_projection_count+=1
+                self.maximum_native_position_correction=max(self.maximum_native_position_correction,detail['maximum_position_correction'])
+                self.last_native_roundoff_projection=detail
+        return state
 
     def validate_start(self, start):
         validate_history(self.scene, start)
