@@ -131,7 +131,7 @@ class ProtectedCoarse:
                     raw.append(z.new_zeros(batch, len(group.ids), 6, z.shape[-1]).index_copy(1, mapped, z))
                 z = torch.cat(raw, -1) * scene.dof[group.ids][None, :, :, None]
                 if z.shape[-1] > maximum_columns:
-                    raise ValueError('Protected component exceeds its declared column budget')
+                    raise ValueError(f'Protected component has {z.shape[-1]} columns, budget {maximum_columns}')
                 embedding = [(root[:, group.ids].transpose(-1, -2) @ z).flatten(1, 2)]
                 for index, rows, ids, valid in group.terms:
                     term = terms[index]
@@ -373,10 +373,13 @@ def protected_update(model, scene, state, metric, raw_coarse, residual, whitenin
     # when the surrounding sparse operations are batched by component.
     if getattr(scene,'component_batch',False) and not independent:
         from .component_batch import BatchedRigidCoarse
-        coarse=BatchedRigidCoarse(scene,metric,raw_coarse.blocks)
+        coarse=BatchedRigidCoarse(scene,metric,raw_coarse.blocks,
+            maximum_columns=int(model.config.get('maximum_protected_columns',12)))
     else:
         maximum=18 if scene.metadata.get('contract') in ('rod_shape_contact_com_v40','elastic_rod_surface_joint_self_contact_v222') and model.config.get('rod_gravity_material_ports',False) else 12
         if independent:maximum=18
+        maximum=int(model.config.get('maximum_protected_columns',maximum))
+        if not 6<=maximum<=64:raise ValueError('Bounded protected column budget required')
         coarse = ProtectedCoarse(scene, metric, raw_coarse.blocks,maximum_columns=maximum,
                                 exact_rigid_singletons=bool(getattr(scene,'fast_rigid_contact',False)) and not independent)
     source = residual.double()
@@ -395,6 +398,92 @@ def protected_update(model, scene, state, metric, raw_coarse, residual, whitenin
         valid = torch.ones(len(source), device=source.device, dtype=torch.bool)
     protected_part = -gain*coarse_r
     complementary_part = local - coarse(metric_action(metric, local))
+    shape_head=getattr(model,'elastic_shape_head',None) if learned else None
+    capture_recorder=scene.metadata.get('elastic_shape_dataset_recorder')
+    capture_only=shape_head is None and capture_recorder is not None
+    if capture_only:shape_head=getattr(model,'elastic_shape_head',None)
+    if shape_head is not None:
+        multi_column=False
+        multi_column_losses=[]
+        supervise=getattr(model,'training',False) and torch.is_grad_enabled()
+        # Freeze the residual BEFORE applying the learned ray. Taking it
+        # afterwards erases the ray's work by Galerkin orthogonality.
+        if supervise:
+            with torch.no_grad():
+                shape_target=source+metric_action(metric,complementary_part.detach())
+        if capture_only and hasattr(capture_recorder,'begin_call'):capture_recorder.begin_call()
+        proposed=shape_head.propose(scene,state,complement,dt,
+            response_hints=(physical,local),return_details=True)
+        if len(proposed)==3:
+            direction,shape_details,column_directions=proposed
+        else:
+            direction,shape_details=proposed
+            column_directions=None
+        if capture_only:image=None
+        else:
+            direction=direction.double()
+            direction=direction-coarse(metric_action(metric,direction))
+            image=metric_action(metric,direction)
+            multi_column=column_directions is not None and column_directions.shape[-1]>0
+            if multi_column:
+                # Solve one tiny coupled Galerkin system per physical
+                # interaction.  Columns are local material patches; only
+                # their H actions are evaluated, so no global dense inverse
+                # is introduced by the learned branch.
+                projected_columns=column_directions.double()
+                projected_columns=projected_columns-coarse(metric_action(metric,projected_columns))
+                column_images=metric_action(metric,projected_columns)
+                for ids in scene.interaction_entities:
+                    d=projected_columns[:,ids]
+                    h=column_images[:,ids]
+                    gram=torch.einsum('bnic,bnid->bcd',d,h)
+                    rhs=(torch.einsum('bnic,bni->bc',d,source[:,ids].double())
+                         +torch.einsum('bnic,bni->bc',h,complementary_part[:,ids].double()))
+                    gram=(gram+gram.transpose(-1,-2))*.5
+                    scale=gram.diagonal(dim1=-2,dim2=-1).abs().sum(-1).clamp_min(1e-30)
+                    regularized=gram+torch.diag_embed(scale[:,None].expand(-1,gram.shape[-1])*1e-10)
+                    coeff=torch.linalg.solve(regularized,-rhs[...,None])[...,0]
+                    valid=torch.isfinite(coeff).all(-1)
+                    coeff=torch.where(valid[:,None],coeff,torch.zeros_like(coeff))
+                    combined=(d*coeff[:,None,None,:]).sum(-1)
+                    combined_image=(h*coeff[:,None,None,:]).sum(-1)
+                    complementary_part=complementary_part.index_add(1,ids,combined)
+                    direction=direction.index_copy(1,ids,combined)
+                    image=image.index_copy(1,ids,combined_image)
+        if not capture_only and not multi_column:
+            for ids in scene.interaction_entities:
+                d=direction[:,ids];hd=image[:,ids]
+                curvature=(d*hd).sum((1,2))
+                rhs=(d*source[:,ids]).sum((1,2))
+                represented=(hd*complementary_part[:,ids]).sum((1,2))
+                active=(curvature>1e-24)&torch.isfinite(curvature)
+                coefficient=torch.where(active,(-rhs-represented)/curvature.clamp_min(1e-24),0.)
+                complementary_part=complementary_part.index_add(1,ids,d*coefficient[:,None,None])
+        elif capture_only:
+            from .elastic_shape_objective import projected_modal_systems
+            target=(source+metric_action(metric,complementary_part)).detach()
+            systems=projected_modal_systems(scene,metric,coarse,target,shape_details,joint=False)
+            capture_recorder.record(shape_details,systems)
+        if supervise:
+            # Supervise the quantity used by the deployed scalar Galerkin
+            # update. Coefficient cosine is not a physical target: a column
+            # and its negative, or any rescaling, produce the same optimal
+            # scalar step. Build the frozen 24-D attainable system for each
+            # interaction, then measure the predicted column's scale/sign
+            # invariant quadratic energy recovery.
+            from .elastic_shape_objective import projected_modal_systems,ray_energy_recovery
+            systems=projected_modal_systems(scene,metric,coarse,shape_target,shape_details,joint=True)
+            losses=[]
+            for system in systems:
+                ids=scene.interaction_entities[system['component']]
+                recovery,active=ray_energy_recovery(direction[:,ids],image[:,ids],
+                    shape_target[:,ids],system['optimal_work'])
+                if bool(active.any()):losses.append((1-recovery).masked_select(active).mean())
+            losses.extend(multi_column_losses)
+            if losses:
+                if not hasattr(model,'_elastic_shape_supervision_terms'):
+                    model._elastic_shape_supervision_terms=[]
+                model._elastic_shape_supervision_terms.extend(losses)
     if scene.metadata.get('independent_object_motion_modes'):
         # A complete coarse basis leaves an exactly empty complement.
         # Forming B r - Q H B r numerically leaves signed roundoff that
@@ -405,6 +494,14 @@ def protected_update(model, scene, state, metric, raw_coarse, residual, whitenin
             complementary_part=complementary_part.index_copy(1,ids,
                 torch.where(complete[:,None,None],0.,complementary_part[:,ids]))
     update = protected_part + complementary_part
+    if model.config.get('analytic_elastic_postsolve',False):
+        from .analytic_material_response import correct
+        update,material_valid=correct(scene,state,metric,coarse,source,update,
+            maximum_columns=int(model.config.get('analytic_material_maximum_columns',96)),
+            maximum_nodes=int(model.config.get('analytic_material_maximum_nodes',4096)),
+            blocked=bool(model.config.get('analytic_material_block_solve',False)))
+        model._analytic_material_total_solves=getattr(model,'_analytic_material_total_solves',0)+scene._analytic_material_last_solves
+        valid=valid&material_valid
     if return_parts:
         return update.to(residual.dtype), coarse_r.to(residual.dtype), coarse.valid & valid, protected_part.to(residual.dtype)
     return update.to(residual.dtype), coarse_r.to(residual.dtype), coarse.valid & valid

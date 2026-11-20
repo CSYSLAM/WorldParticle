@@ -20,7 +20,8 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
-NEWTON = Path('/home/oem/code/engine/newton')
+from wp_vbd.newton_source import source_root
+NEWTON = source_root()
 
 
 def worker(args):

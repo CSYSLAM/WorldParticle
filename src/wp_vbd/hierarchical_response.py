@@ -66,6 +66,11 @@ class HierarchicalVectorResponse(VectorInverseResponse):
         return raw+addition
 
     def encode(self,scene,state,physical,baseline,relation,dt):
+        latent,features=self._encode_neural(scene,state,physical,baseline,relation,dt)
+        if getattr(self,'shared_velocity_features',False):self.last_latent=latent
+        return latent,features
+
+    def _encode_neural(self,scene,state,physical,baseline,relation,dt):
         self.relation_chunk_rows=self.hierarchy.relation_condition.checkpoint_rows
         if self.hierarchy.relation_condition.checkpoint_rows:
             self.hierarchy.relation_condition.checkpoint_inputs_on_cpu=bool(getattr(self,'checkpoint_inputs_on_cpu',False))

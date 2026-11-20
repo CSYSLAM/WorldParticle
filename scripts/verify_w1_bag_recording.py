@@ -31,7 +31,7 @@ def main():
     from scipy.spatial.transform import Rotation
     from wp_vbd.w1_bag_scene import paper_shell
     folder=args.recording.resolve();run=json.loads((folder/'run.json').read_text());quality=json.loads((folder/'quality.json').read_text())
-    assert run['mode']=='shared_network_inference' and run['status']=='COMPLETE' and quality['accepted']
+    assert run['mode']=='shared_network_inference' and run['status']=='COMPLETE'
     assert not any(run['forbidden_solver_calls'].values()) and run['teacher_trajectory_reads']==0 and run['optimizer_updates']==0
     assert run['full_authored_timeline_recorded']
     with np.load(folder/'trajectory.npz') as tape:
@@ -55,7 +55,11 @@ def main():
     # Paper shell edges must be exactly shared and the mouth the sole boundary.
     edges=np.sort(np.concatenate((closed[:,[0,1]],closed[:,[1,2]],closed[:,[2,0]])),axis=1)
     _,counts=np.unique(edges,axis=0,return_counts=True);assert (counts==2).all()
-    result={'status':'PASS' if inside and all(inside) and fraction>.5 else 'FAIL',
+    task_passed=bool(inside and all(inside) and fraction>.5)
+    result={'status':'PASS' if task_passed and quality['accepted'] else 'FAIL',
+            'containment_and_grasp_checks_passed':task_passed,
+            'recording_quality_passed':bool(quality['accepted']),
+            'visible_material_deformation':bool(quality.get('visible_material_deformation',False)),
             'all_checked_cube_corners_inside_actual_capped_shell':bool(inside and all(inside)),
             'final_interval_frames_checked':len(inside),'cube_surface_tolerance_m':.002,
             'left_bilateral_contact_fraction_after_grasp':fraction,

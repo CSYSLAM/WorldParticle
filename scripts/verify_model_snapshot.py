@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--snapshot',type=Path,default=ROOT/'model_releases/shared_vbd_step156')
+    parser.add_argument('--snapshot',type=Path,default=ROOT/'model_releases/shared_vbd_v24_cloth40')
     parser.add_argument('--report',type=Path)
     args=parser.parse_args();folder=args.snapshot.expanduser().resolve()
     manifest=json.loads((folder/'manifest.json').read_text())
@@ -30,16 +30,20 @@ def main():
     if stored['step']!=manifest['checkpoint']['step'] or stored['architecture']!=manifest['architecture']:
         raise ValueError('Model identity mismatch')
     network=MixedSolver(config).eval();network.load_state_dict(stored['model'],strict=True)
-    count=sum(p.numel() for p in network.protected_response.parameters())
+    prefixes=tuple(manifest.get('active_parameter_prefixes',['protected_response.']))
+    count=sum(p.numel() for name,p in network.named_parameters() if name.startswith(prefixes))
     if count!=manifest['active_neural_parameters']:raise ValueError('Active parameter count mismatch')
     if not all(bool(torch.isfinite(value).all()) for value in stored['model'].values()):
         raise ValueError('Nonfinite model weights')
-    if not stored.get('optimizer',{}).get('state') or 'rng_state' not in stored:
+    optimizer_present=bool(stored.get('optimizer',{}).get('state'))
+    rng_present='rng_state' in stored
+    if (manifest['checkpoint'].get('optimizer_included',True) and not optimizer_present or
+            manifest['checkpoint'].get('rng_included',True) and not rng_present):
         raise ValueError('Expected optimizer and RNG state for this full checkpoint')
     result=dict(status='PASS',checkpoint_sha256=digest,checkpoint_bytes=path.stat().st_size,
                 checkpoint_step=stored['step'],active_neural_parameters=count,
-                strict_model_load=True,all_model_weights_finite=True,optimizer_and_rng_present=True,
-                optimizer_state_entries=len(stored['optimizer']['state']),
+                strict_model_load=True,all_model_weights_finite=True,optimizer_and_rng_present=optimizer_present and rng_present,
+                optimizer_state_entries=len(stored.get('optimizer',{}).get('state',{})),
                 scope='Artifact integrity and strict CPU loading; no new rollout, training or convergence certification.')
     if args.report:
         args.report.parent.mkdir(parents=True,exist_ok=True);args.report.write_text(json.dumps(result,indent=2)+'\n')

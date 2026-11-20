@@ -6,7 +6,9 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(ROOT/'src'),'/home/oem/code/engine/newton']
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.newton_source import activate_newton_source,newton_revision
+activate_newton_source()
 
 
 def main():
@@ -66,7 +68,7 @@ def main():
     result.update(input_x=np.stack(controls_x), input_q=np.stack(controls_q), input_force=np.stack(forces), input_torque=np.stack(torques))
     if not all(np.isfinite(value).all() for value in result.values()):raise ValueError('Nonfinite teacher episode')
     target='Original authored iteration budget' if args.iterations is None else 'Explicit reference iteration-budget audit, not a convergence certificate'
-    metadata.update(index=0, parameter_factor=args.factor, teacher_frames=args.frames, teacher_substeps=len(forces), teacher_iterations=solver.iterations, teacher_device=args.device, arguments=arguments, teacher_target=target+', rescaled physical stiffness with caches explicitly refreshed')
+    metadata.update(index=0, parameter_factor=args.factor, teacher_frames=args.frames, teacher_substeps=len(forces), teacher_iterations=solver.iterations, teacher_device=args.device, arguments=arguments, source_sha=newton_revision(), teacher_target=target+', rescaled physical stiffness with caches explicitly refreshed')
     final_check='NOT_RUN';task_metrics=None
     if args.report:
         try:example.test_final();final_check='PASS'

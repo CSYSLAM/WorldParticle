@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "checkpoint_sha256": "1aac9909419fbb8dda7beef4f0d533050d4ce4191849ebd54ba37dd6a85a2132",
+  "checkpoint_bytes": 188146967,
+  "checkpoint_step": 40,
+  "active_neural_parameters": 46884109,
+  "strict_model_load": true,
+  "all_model_weights_finite": true,
+  "optimizer_and_rng_present": false,
+  "optimizer_state_entries": 0,
+  "scope": "Artifact integrity and strict CPU loading; no new rollout, training or convergence certification."
+}

@@ -7,7 +7,7 @@ from .rigid_contact_scene import export_model,RigidContactScene
 from .rigid_contact_runtime import CollisionOracle
 
 
-def load_reference(path,wp,newton,device='cuda:0'):
+def load_reference(path,wp,newton,device='cuda:0',*,state_device=None):
     from .official import make_example
     with np.load(path,allow_pickle=False) as archive:
         values={key:archive[key].copy() for key in archive.files if key!='metadata'}
@@ -36,12 +36,12 @@ def load_reference(path,wp,newton,device='cuda:0'):
     scene.geometry_oracle=CollisionOracle(example.model,scene,wp,newton)
     states={}
     for key in ('x','q','v','omega'):
-        value=torch.as_tensor(values[key],device=device).double()
+        value=torch.as_tensor(values[key],device=state_device or device).double()
         if key=='q':value=so3.normalize(value)
         world=value.new_zeros(len(value),1,value.shape[-1])
         if key=='q':world[...,3]=1.
         states[key]=torch.cat((value,world),1)
-    force=torch.as_tensor(values['force'],device=device).double()
+    force=torch.as_tensor(values['force'],device=state_device or device).double()
     force=torch.cat((force,force.new_zeros(len(force),1,6)),1)
     states['input_force']=force[...,:3];states['input_torque']=force[...,3:]
     if not all(bool(torch.isfinite(value).all()) for value in states.values()):raise ValueError('Nonfinite contact labels')

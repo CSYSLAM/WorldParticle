@@ -266,7 +266,8 @@ def incremental_objective(scene,state,start,target_x,target_q,dt,lagged_load):
         edge=so3.normalize(p[:,:,3]-p[:,:,2])
         theta=torch.atan2((torch.linalg.cross(n1,n2)*edge).sum(-1),(n1*n2).sum(-1))
         valid=scene.bending_indices
-        term=.5*scene.bend_material[valid,0]*scene.bend_length[valid]*(theta-scene.bend_angle[valid]).square()
+        from .bending_angle import difference
+        term=.5*scene.bend_material[valid,0]*scene.bend_length[valid]*difference(scene,theta,scene.bend_angle[valid]).square()
         energy=energy.index_add(1,energy_owner(scene,ids),term)
     c=joint_coordinates(scene,state.x[:,scene.joints],state.q[:,scene.joints])
     term=.5*(scene.joint_stiffness*c.square()).sum(-1)

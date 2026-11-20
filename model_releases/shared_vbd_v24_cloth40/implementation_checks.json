@@ -1,0 +1,135 @@
+{
+  "status": "PASS",
+  "checks": {
+    "contact_warm_start": {
+      "status": "PASS",
+      "tangential_motion_preserved": true,
+      "separating_motion_preserved": true,
+      "independent_corner_normals_supported": true,
+      "dynamic_and_far_contacts_unchanged": true,
+      "ineligible_rows_unchanged": true,
+      "input_not_mutated": true,
+      "warm_gradient_verified": true,
+      "native_dynamics_calls": 0,
+      "optimizer_updates": 0
+    },
+    "mimic_metric_tangent": {
+      "status": "PASS",
+      "cases": [
+        {
+          "time": 2.1,
+          "constraint_error": 2.252768826517537e-16,
+          "transpose_error": 3.552713678800501e-15,
+          "idempotence_error": 5.551115123125783e-17,
+          "local_energy_before": 1342130.7890979399,
+          "local_energy_after": 1291036.9823088446,
+          "response_symmetry_error": 1.3877787807814457e-17,
+          "residual_backward_norm": 3.4845885937435544e-05
+        },
+        {
+          "time": 3.3,
+          "constraint_error": 5.116282289323315e-16,
+          "transpose_error": 0.0,
+          "idempotence_error": 1.1102230246251565e-16,
+          "local_energy_before": 3911587.423315843,
+          "local_energy_after": 3722563.2576930607,
+          "response_symmetry_error": 0.0,
+          "residual_backward_norm": 1.2642573930293848e-05
+        }
+      ],
+      "native_dynamics_calls": 0,
+      "optimizer_updates": 0,
+      "new_neural_parameters": 0,
+      "scope": "Actual frozen contact/drive inverse blocks; primal/dual transpose, feasible tangent, idempotence, local-energy contraction, SPD response and residual backward.",
+      "committed_surface_dual_is_last_accepted_dual": true
+    },
+    "supervised_step": {
+      "status": "PASS",
+      "no_teacher_state_or_history_reads": true,
+      "accepted_history_continuity": true,
+      "original_state_unchanged_after_failed_mutation": true,
+      "repaired_end_time_exact": true,
+      "external_impulse_integral_exact": true,
+      "finite_correct_gradient": true,
+      "hard_floor_1_over_600s": true,
+      "all_attempted_neural_calls_counted": true
+    },
+    "surface_tangent_memory": {
+      "status": "PASS",
+      "feature_exact_match_and_duplicate_suppression": true,
+      "new_normal_projection_and_current_coulomb_bound": true,
+      "release_clears_carried_force": true,
+      "rejected_step_does_not_commit": true,
+      "learned_seed_respects_coulomb_disk": true,
+      "learned_seed_gradient_norm": 0.32055824995040894,
+      "optimizer_updates": 0
+    },
+    "adaptive_recovery": {
+      "status": "PASS",
+      "minimum_dt_s": 0.0016666666666666668,
+      "learned_repair_completes_requested_interval": true,
+      "all_recovery_rounds_and_retries_counted": true,
+      "event_aligned_floor_recovery": true,
+      "independent_admission_rejections_repaired": true,
+      "private_history_per_recovery_candidate": true,
+      "optional_configuration_restored_on_success_failure_exception": true,
+      "work_budget_enforced": true,
+      "impossible_time_partitions_rejected_before_solving": true,
+      "native_dynamics_calls": 0,
+      "optimizer_updates": 0,
+      "scope": "Synthetic failure regression using the production stepper and runtime recovery ladder; not a physical grasp validation."
+    },
+    "analytic_material_response": {
+      "status": "PASS",
+      "rank_deficient_solve_matches_independent_pseudoinverse": true,
+      "projected_residual_norm": 2.44055488190019e-14,
+      "coupled_quadratic_energy_does_not_increase": true,
+      "fixed_and_rotational_dofs_unchanged": true,
+      "coarse_energy_orthogonality_preserved": true,
+      "world_rotation_and_translation_covariance_error": 2.915445662665661e-13,
+      "independent_objects_do_not_share_the_material_work_budget": true,
+      "bounded_blocks_keep_all_coupled_objects_and_nonincreasing_energy": true,
+      "shared_proposal_gradient_norm": 11.335214942592893,
+      "native_dynamics_calls": 0,
+      "optimizer_updates": 0
+    },
+    "periodic_bending": {
+      "status": "PASS",
+      "angle_difference": [
+        2.0000000005244853e-06,
+        -2.0000000005244853e-06
+      ],
+      "damping_force_energy_gradient_error": 8.470329472543003e-22,
+      "periodic_damping_energy": 7.1999999973814095e-12,
+      "legacy_damping_energy": 71.06110644891638,
+      "native_dynamics_calls": 0,
+      "optimizer_updates": 0,
+      "scope": "Local continuity at the representation boundary, unchanged legacy option, real hinge force/potential gradient. A relative turn of pi remains a local chart boundary."
+    },
+    "cloth_drape_metrics": {
+      "status": "PASS",
+      "flat": {
+        "panel_width_ratio": 1.0,
+        "panel_normal_coherence": 0.9999999999999049,
+        "severe_panel_hinges": 0,
+        "panel_hinges": 11795,
+        "panel_triangles": 7950,
+        "degenerate": false
+      },
+      "rolled": {
+        "panel_width_ratio": 0.33151222399785724,
+        "panel_normal_coherence": 0.5555032979285283,
+        "severe_panel_hinges": 0,
+        "panel_hinges": 11795,
+        "panel_triangles": 7950,
+        "degenerate": false
+      },
+      "rolled_area_ratio_range": [
+        0.9993726255647818,
+        0.9993726255647929
+      ],
+      "rotation_translation_invariant": true,
+      "scope": "Appearance diagnostic for broad hanging cloth, not a universal fold prohibition."
+    }
+  }
+}

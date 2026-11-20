@@ -1,5 +1,15 @@
 # W1 双臂抓取
 
+当前默认已迁移至 `model_releases/shared_vbd_v24_cloth40/model.pt`：无垫块侧夹，左手刚体圆柱、右手软球，摩擦 2.5，每帧名义三子步，每物理步两轮解析预测和一次网络校正。完整 180 帧验证实际调用网络 540 次，零重试；两物体最终抬升约 8.8、8.6 cm，回收约 10.0、8.3 cm，最小四面体体积比 0.965，均未掉落。视频为 `outputs/current_weight_demos_20261120/videos/05_w1_dual_side.mp4`。
+
+```bash
+.venv/bin/python scripts/run_robot_validation.py --scene w1_dual --window
+# 或完整录制后生成视频
+.venv/bin/python scripts/run_robot_validation.py --scene w1_dual --render
+```
+
+六例统一参数和批量录制见 [当前场景入口](robot_demo_suite.md)。下面的 step156、十子步和四轮网络记录是历史实验，不代表当前默认配置；旧姿态可通过显式 `--style`、`--objects`、`--checkpoint` 和 `--substeps` 选择。
+
 使用外部资产 `~/下载/assets/w1-030/robot.urdf`，左手夹黄色刚体，右手夹蓝色软体。机器人从物体两侧开始，闭爪、抬升、保持。控制器只发送关节目标；双臂、手指和两个物体的运动均由共享网络推理路径推进。
 
 在已有 Torch、Warp 和固定版本 Newton 环境中，运行 `python -m pip install -r requirements-vbd-assets.txt` 补齐资产、IK 与视频依赖。[step 156 权重](../model_releases/shared_vbd_step156/README.md)通过下载脚本获取；机器人网格需另行准备。

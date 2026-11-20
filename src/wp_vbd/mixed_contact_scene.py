@@ -103,8 +103,14 @@ class MixedContactScene(MixedScene):
         return incidence, kinds, enabled
 
     def update_graph(self, owners, active):
+        previous=getattr(self,'_graph_device_signature',None)
+        values=(owners,active,self.candidate_kind)
+        if self._graph_signature is not None and previous is not None and all(a.shape==b.shape for a,b in zip(values,previous)):
+            same=all(torch.equal(a,b) for a,b in zip(values,previous))
+            if same:return
         signature = (tuple(map(tuple, owners.tolist())), tuple(active.tolist()), tuple(self.candidate_kind.tolist()))
         if self._graph_signature == signature: return
+        self._graph_device_signature=tuple(value.detach().clone() for value in values)
         self._graph_signature = signature; self.topology_generation += 1
         incidence, kinds, enabled = self.all_relations(owners, active)
         graph = build_topology(self.kind, self.movable, self.object_id, incidence, kinds, potential_active=enabled, generation=self.topology_generation)

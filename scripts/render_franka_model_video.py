@@ -60,6 +60,9 @@ def main():
         cls.__init__=forbidden;cls.step=forbidden
     with np.load(a.recording/'trajectory.npz') as z:
         particle=z['particle_position'];body=z['body_pose'];times=z['physical_time'];faces=z['faces']
+    peak_lift=float((particle.mean(1)[:,2]-particle[0].mean(0)[2]).max())
+    from wp_vbd.franka_lift_metrics import table_height,whole_object_lift
+    lift=whole_object_lift(particle,times,table_height(e.model,newton)) if not rigid_cloth else None
     assert np.array_equal(faces,e.model.tri_indices.numpy())
     viewer=newton.viewer.ViewerGL(width=944,height=748,vsync=False,headless=True,enable_cuda_interop=newton.viewer.ViewerGL.CudaInterop.NONE)
     viewer.set_model(e.model);viewer.show_ui=False;viewer.show_particles=False;viewer.show_joints=False;viewer.show_contacts=False
@@ -76,8 +79,12 @@ def main():
     def compose(index):
         e.state_0.particle_q.assign(particle[index]);e.state_0.body_q.assign(body[index])
         frame=Image.new('RGB',(1920,900),(18,28,45));draw=ImageDraw.Draw(frame)
-        dt=run['physical_dt'];preview=' (coarse preview)' if dt>1/600+1e-12 else ''
+        dt=run['physical_dt'];preview=' (requested interval; adaptive)' if run.get('solver_parameters',{}).get('automatic_rejected_step_recovery') else ' (single macro step)' if run.get('requested_single_step_dt') else ' (coarse preview)' if dt>1/600+1e-12 else ''
         mode='Offline VBD reference' if reference else f'Shared model step {run["checkpoint_step"]}'
+        if run.get('analytic_predictor_rounds',0):
+            analytic=run['analytic_predictor_rounds'];neural=run['solver_parameters'].get('model_unroll',1)
+            mode=f'Shared model s{run["checkpoint_step"]} / A{analytic}+N{neural}'
+            if run.get('analytic_elastic_postsolve',False):mode+=' / elastic correction'
         device='CUDA' if run['device'].startswith('cuda') else 'CPU'
         suffix=''
         if reference:
@@ -99,6 +106,14 @@ def main():
         if lifting and run.get('initial_command_time',0.)<=1.3+1e-9:label='Open jaws / pinch / lift / hold'
         if lifting and run.get('soft_center_lift_m',0.)<.02:
             label='From pinch pose: object NOT lifted'
+        if not rigid_cloth and complete:
+            label=('Full control sequence / sustained whole object lift' if lift['whole_object_lift_sustained_250ms'] else
+                   'Full control sequence / transient clearance, no sustained lift' if lift['whole_object_lift_above_5mm_observed'] else
+                   'Full control sequence / COM rose, full lift NOT observed' if peak_lift>.02 else
+                   'Full control sequence / object NOT lifted')
+            release=run.get('teacher_release')
+            if release and times[index]+run.get('initial_command_time',0.)>=release['start_time_s']:
+                label+=' / release command'
         if run['status']=='FAILED':label=f'FAILED at {times[-1]:.3f}s / partial recording'
         if rigid_cloth:
             from wp_vbd.franka_rigid_cloth_scene import command
@@ -136,6 +151,8 @@ def main():
     a.output.with_suffix('.json').write_text(json.dumps({'status':('RECORDED_REFERENCE_SNAPSHOT' if a.snapshot_only else 'RECORDED_REFERENCE_VIDEO') if reference else ('RECORDED_MODEL_SNAPSHOT' if a.snapshot_only else 'RECORDED_MODEL_VIDEO'),'recording':str(a.recording),
          'recording_mode':run['mode'],'model_inference_result':not reference,
          'recording_status':run['status'],'physical_seconds':float(times[-1]),'video_frames':written,'fps':fps,
+         'peak_unweighted_particle_com_lift_m':peak_lift,'lift_above_2cm_observed':peak_lift>.02,
+         'whole_object_lift':lift,
          'full_vbd_calls_during_render':0,'model_execution_during_render':False,'camera_views':camera,
          'articulation_modes':run.get('articulation_modes',False),'separate_coarse_step':run.get('separate_coarse_step',False),
          'material_motion_modes':run.get('material_motion_modes',False),'solver_parameters':run.get('solver_parameters',{}),

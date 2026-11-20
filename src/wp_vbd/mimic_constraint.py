@@ -110,8 +110,13 @@ def group_topology(scene,evaluated,device,*,cache=True):
     return groups
 
 class Tangent:
-    """Sparse P=I-M^-1 J^T (J M^-1 J^T)^+ J, with <=6 rows/group."""
-    def __init__(self,scene,state,evaluated=None):
+    """Sparse P=I-B J^T (J B J^T)^+ J, with <=6 rows/group.
+
+    B defaults to the physical inverse mass. A frozen local response
+    inverse can be supplied to preserve its conditioning in primal/dual
+    response sandwiches; geometry retraction retains the mass default.
+    """
+    def __init__(self,scene,state,evaluated=None,*,inverse_blocks=None):
         self.scene=scene;self.rows=rows(scene,state) if evaluated is None else evaluated
         self.groups=[];self.valid=self.rows.valid.all(-1)
         topology=group_topology(scene,self.rows,state.x.device,cache=evaluated is None)
@@ -121,9 +126,23 @@ class Tangent:
                 # Sum repeated owners BEFORE computing J M^-1 J^T.
                 for row,owner,index,side in roles:
                     jac[:,row,owner]+=self.rows.jacobian[:,index,side]
-                inverse=state.x.new_zeros(len(state.x),len(ids),6,6)
-                inverse[...,:3,:3]=torch.eye(3,device=state.x.device,dtype=state.x.dtype)/scene.mass[ids,None,None]
-                rotation=so3.matrix(state.q[:,ids]);inverse[...,3:,3:]=rotation@scene.inverse_inertia[ids]@rotation.transpose(-1,-2)
+                if inverse_blocks is None:
+                    inverse=state.x.new_zeros(len(state.x),len(ids),6,6)
+                    inverse[...,:3,:3]=torch.eye(3,device=state.x.device,dtype=state.x.dtype)/scene.mass[ids,None,None]
+                    rotation=so3.matrix(state.q[:,ids]);inverse[...,3:,3:]=rotation@scene.inverse_inertia[ids]@rotation.transpose(-1,-2)
+                else:
+                    # The primal AND dual projector must use the same
+                    # inverse as the response. Mass projection can amplify
+                    # the frozen elastic/contact curvature by orders of
+                    # magnitude when the local inverse is H_diag^-1.
+                    if inverse_blocks.shape!=(*state.x.shape[:2],6,6):
+                        raise ValueError('Complete local inverse blocks required for a metric tangent')
+                    inverse=inverse_blocks[:,ids].detach()
+                    scale=inverse.abs().amax((-1,-2)).clamp_min(1e-30)
+                    self.valid&=torch.isfinite(inverse).all((-1,-2,-3))
+                    self.valid&=((inverse-inverse.transpose(-1,-2)).abs().amax((-1,-2))<=1e-10*scale).all(-1)
+                    _,info=torch.linalg.cholesky_ex((inverse+inverse.transpose(-1,-2))*.5,check_errors=False)
+                    self.valid&=(info==0).all(-1)
                 lift=torch.einsum('bnij,brnj->brni',inverse,jac)
                 gram=torch.einsum('brni,bsni->brs',jac,lift)
                 if len(selected)==1:

@@ -89,7 +89,7 @@ class SoftSurfacePorts:
         normal = normal/normal.norm(dim=-1, keepdim=True)
         # Native edge/face force uses MAX radius over all primitive corners,
         # including corners whose barycentric contact weight is zero.
-        radii = wp.to_torch(model.particle_radius).double()
+        radii = native_tensor(wp, model.particle_radius).double()
         radius = torch.where(valid, radii[corners.clamp_min(0)], 0.).amax(-1)
         margin = native_tensor(wp, model.shape_margin)[shape].clone().double()
         velocity = take('soft_contact_body_vel').double()

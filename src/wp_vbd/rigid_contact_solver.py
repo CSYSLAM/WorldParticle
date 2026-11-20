@@ -124,6 +124,9 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
         scene.component_batch=bool(model.config.get('mixed_component_batch',False));scene.fast_rigid_contact=scene.component_batch
     if physics is not None and not getattr(physics,'supports_component_batch',True):
         scene.component_batch=False;scene.fast_rigid_contact=False
+    scene.metadata['learned_elastic_shape_response']=bool(
+        learned and getattr(model,'elastic_shape_head',None) is not None)
+    if model.config.get('analytic_elastic_response',False):scene.metadata['elastic_shape_response']=True
     tx,tq=predictor(scene,start,dt,force,torque)
     oracle=scene.geometry_oracle;forecast=State(tx,tq,start.v,start.omega)
     predictor_motion_valid,forecast_travel=oracle.motion(start,forecast)
@@ -140,6 +143,10 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
         predictor_physics_valid=physics.predictor_domain(scene,start,forecast,model.config,dt=dt)
         valid=valid&predictor_physics_valid
     context=begin_rows(scene,start,scene.candidates,dt)
+    if (physics is not None and physics.__name__.endswith('surface_joint_system')
+            and scene.metadata.get('surface_tangent_memory',False)):
+        from .surface_tangent_memory import seed_learned
+        seed_learned(model,scene,start,context,learned)
     current=start;feedback=torch.ones_like(start.x[...,0]);roots=torch.zeros_like(feedback,dtype=torch.bool)
     if repair_enabled:
         from .self_contact_repair import candidate as repair_candidate
@@ -153,6 +160,10 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
         valid=torch.isfinite(tx).all((1,2))&torch.isfinite(tq).all((1,2))&predictor_physics_valid
     frozen=evaluate_rows(scene,current,start,context)
     warm=torch.cat((tx-current.x,so3.log(so3.multiply(tq,so3.conjugate(current.q)))),-1)
+    warm_diagnostic=None
+    if model.config.get('contact_aware_warm_start',False):
+        from .contact_warm_start import prepare
+        warm,warm_diagnostic=prepare(scene,current,warm,context,frozen)
     current,_,_=choose(scene,current,start,warm,tx,tq,context,frozen,model.config.get('line_search',[1.,.5,.25,.125,.0625]),physics=physics,remaining_motion_scale=bool(model.config.get('contact_motion_ray_step',False)))
     # Only the chosen state survives the predictor line search. Keeping its
     # initial row dictionary also keeps every unused dense contact Jacobian
@@ -168,16 +179,25 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
     if repair_enabled and retain_accepted:progressed[:]=True
     w=mass_whitening(scene,start,dt).detach();eye=torch.eye(6,device=scene.device,dtype=start.x.dtype)
     iterations=[];metric_ray_scales=[];activation_ray_scales=[];separate_ray_scales=[]
-    for _ in range(model.config.get('unroll',4)):
+    predictor_rounds=int(model.config.get('analytic_predictor_rounds',0))
+    correction_rounds=model.config.get('unroll',4)
+    if predictor_rounds<0 or predictor_rounds>3:raise ValueError('Bounded analytic predictor budget required')
+    for iteration in range(predictor_rounds+correction_rounds):
+        # Advance the actual state/contact iterate before the shared network.
+        # All stages own one physical interval, with no native I/O between them.
+        iteration_learned=learned and iteration>=predictor_rounds
         # The previous evaluated row contributes its tangent dual through
         # context; its other readout/metric arrays have no later consumer.
         updated=None
         residual,metric,contact=evaluate_system(scene,current,start,tx,tq,context)
-        tangent=None if physics is None else physics.tangent(scene,current)
-        if tangent is not None:residual=tangent.dual(residual);valid=valid&tangent.valid
-        scene.update_graph(context.contacts.owners,contact.get('topology_active',contact['active'])[0])
         blocks=metric.diagonal;white=w@blocks.detach()@w+torch.diag_embed((~scene.dof).to(w.dtype))[None]+1e-6*eye
         inverse=torch.linalg.inv_ex(white,check_errors=False);baseline=inverse.inverse.detach()
+        if model.config.get('mimic_metric_tangent',False) and getattr(scene,'mimic_spec',None) is not None:
+            from .mimic_constraint import Tangent
+            tangent=Tangent(scene,current,inverse_blocks=w@baseline@w)
+        else:tangent=None if physics is None else physics.tangent(scene,current)
+        if tangent is not None:residual=tangent.dual(residual);valid=valid&tangent.valid
+        scene.update_graph(context.contacts.owners,contact.get('topology_active',contact['active'])[0])
         physical=-(w@baseline@w@residual[...,None])[...,0];last_physical=physical
         if tangent is not None:physical=tangent.primal(physical);last_physical=physical
         relation=encode_relations(scene,current,start,context,contact,feedback)
@@ -190,10 +210,14 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
         separate=bool(scene.metadata.get('separate_coarse_ray_step',False))
         if separate and not model.config.get('contact_metric_ray_step',False):
             raise ValueError('Separate subspace proposals require the final physical curvature ray check')
-        response=protected_update(model,scene,current,metric,raw_coarse,response_residual,w,baseline,relation,physical,dt,learned,return_parts=separate)
+        network_state=current
+        if iteration_learned and predictor_rounds:
+            network_state=State(current.x,current.q,(current.x-start.x)/dt,
+                so3.log(so3.multiply(current.q,so3.conjugate(start.q)))/dt,current.history)
+        response=protected_update(model,scene,network_state,metric,raw_coarse,response_residual,w,baseline,relation,physical,dt,iteration_learned,return_parts=separate)
         update,coarse_r,ok=response[:3]
         protected_part=response[3] if separate else None
-        # The mass tangent can change the energy curvature of a proposal.
+        # The constrained tangent can change a proposal's energy curvature.
         # Scale the actual constrained direction, rather than projecting a
         # previously scaled unconstrained direction afterwards.
         if tangent is not None:update=tangent.primal(update);coarse_r=tangent.primal(coarse_r)
@@ -209,7 +233,9 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
             from .metric_ray_step import scale_proposal
             update,ray_valid,ray_detail=scale_proposal(scene,metric,response_residual,update)
             ok=ok&ray_valid;metric_ray_scales.append(ray_detail)
-        valid=valid&ok&(inverse.info==0).all(-1)&contact['valid'].all(-1)
+        inverse_valid=(inverse.info==0).all(-1)
+        contact_valid=contact['valid'].all(-1)
+        valid=valid&ok&inverse_valid&contact_valid
         extent=torch.cat((update[...,:3]/scene.length,update[...,3:]),-1).norm(dim=-1)
         radius=model.config.get('trust_radius',.1)
         if scene.component_batch:
@@ -264,7 +290,16 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
                 roots[:,ids]|=stationary&dual_fixed
         if not allow_stall:valid=valid&selected.all(-1)
         if retain_accepted:progressed|=selected
-        iterations.append({'inverse_valid':bool((inverse.info==0).all()),'response_valid':bool(ok.all()),'contact_valid':bool(contact['valid'].all()),'selected':selected.detach().cpu().tolist(),'maximum_physical':float(physical.abs().max()),'maximum_update':float(update.abs().max())})
+        if scene.metadata.get('compact_numerical_diagnostics',False):
+            iterations.append({'phase':'neural_correction' if iteration_learned else 'analytic_predictor',
+                'selected':selected.detach(),'maximum_physical':physical.detach().abs().amax(),
+                'maximum_update':update.detach().abs().amax(),
+                'inverse_valid':inverse_valid.detach(),'response_valid':ok.detach(),
+                'contact_valid':contact_valid.detach(),
+                'tangent_valid':True if tangent is None else tangent.valid.detach()})
+        else:
+            iterations.append({'phase':'neural_correction' if iteration_learned else 'analytic_predictor',
+                'inverse_valid':bool((inverse.info==0).all()),'response_valid':bool(ok.all()),'contact_valid':bool(contact['valid'].all()),'selected':selected.detach().cpu().tolist(),'maximum_physical':float(physical.abs().max()),'maximum_update':float(update.abs().max())})
         current=chosen
         updated=evaluate_rows(scene,current,start,context)
         context.dual_t=updated['tangent_force']
@@ -289,10 +324,13 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
     if physics is not None:output=physics.finish(scene,start,output,context,valid)
     physical_gap=context.contacts.physical_margin[None]-updated['raw_depth']
     diagnostic={'accepted':valid,'iterations':iterations,'finite':finite,'min_alpha':minimum,'rejected_entities':~selected,'rejected_physical_step':last_physical,'numerical_root_entities':roots,'dual_only_iterations':dual_only,'minimum_contact_normal_physical_separation':float(physical_gap.min()) if physical_gap.numel() else None,'contacts':len(context.contacts.owners),'collision_generation':context.contacts.generation,'full_vbd_calls':0,'contact_safety':'BOUNDED_MOTION_WITH_EXPANDED_DETECTION_GAP; FINITE_MATERIAL_PENETRATION_ALLOWED','architecture':model.architecture_id}
+    if model.config.get('terminal_velocity_correction', False):
+        diagnostic['physical_contact_gap'] = physical_gap
     diagnostic.update(predictor_motion_valid=predictor_motion_valid.detach(),
         predictor_physics_domain_valid=predictor_physics_valid.detach(),
         predictor_maximum_surface_travel=forecast_travel.detach().amax(-1),
         final_physics_domain_valid=final_physics_valid.detach())
+    if warm_diagnostic is not None:diagnostic['contact_aware_warm_start']=warm_diagnostic
     if bounded_target:
         diagnostic.update(inertial_forecast_is_target_only=True,
             final_motion_domain_valid=final_motion_valid.detach(),

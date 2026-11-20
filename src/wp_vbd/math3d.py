@@ -3,7 +3,7 @@
 import torch
 
 
-def eigh_zero_safe(value):
+def eigh_zero_safe(value,*,maximum_batch=8192):
     """Exact decomposition of zero blocks without a zero-scale GPU solve.
 
     Some CUDA library paths return NaN eigenvalues for an exactly zero 3x3
@@ -11,6 +11,21 @@ def eigh_zero_safe(value):
     restore the mathematically exact zero spectrum and canonical basis.
     This adds no physical ridge or nonzero metric to an inactive contact.
     """
+    if type(maximum_batch) is not int or maximum_batch<1:
+        raise ValueError('A positive independent eigensystem batch budget required')
+    n=value.shape[-1]
+    if value.shape[-2]!=n:raise ValueError('Square matrix blocks required')
+    count=value.numel()//(n*n)
+    if count>maximum_batch:
+        # CUDA's batched Jacobi workspace can dominate the actual tiny
+        # matrices in a dense-contact scene. Independent blocks have no
+        # cross-batch terms: chunk the decomposition, retaining every block
+        # and the original differentiable concatenation.
+        spectra=[];frames=[]
+        for part in value.reshape(-1,n,n).split(maximum_batch):
+            eigen,frame=eigh_zero_safe(part,maximum_batch=maximum_batch)
+            spectra.append(eigen);frames.append(frame)
+        return torch.cat(spectra).reshape(value.shape[:-1]),torch.cat(frames).reshape(value.shape)
     zero=(value==0).all(-1).all(-1)
     eye=torch.eye(value.shape[-1],device=value.device,dtype=value.dtype)
     eigen,frame=torch.linalg.eigh(torch.where(zero[...,None,None],eye,value))

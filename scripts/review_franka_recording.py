@@ -142,6 +142,7 @@ def main():
     centers = x.mean(1)
     hold = np.flatnonzero(phases == 'hold')
     start_hold = int(hold[0]) if len(hold) else None
+    end_hold = int(hold[-1])+1 if len(hold) else None
     samples = sorted(set(range(0, len(rows), 30)) | {len(rows)-1})
     result = {'status':'COMPLETE_RECORDED_GEOMETRY_INSPECTION',
               'recording':str(args.recording), 'frames_checked':len(rows),
@@ -153,8 +154,8 @@ def main():
               'max_tet_volume_ratio_over_recording':float(ratio.max()),
               'minimum_material_surface_z':min(r['material_surface_min_z'] for r in rows),
               'table_top_z':.2,
-              'hold_seconds':float(times[-1]-times[start_hold]) if start_hold is not None else 0.,
-              'hold_com_vertical_change_m':float(centers[-1,2]-centers[start_hold,2]) if start_hold is not None else None,
+              'hold_seconds':float(times[end_hold]-times[start_hold]) if start_hold is not None else 0.,
+              'hold_com_vertical_change_m':float(centers[end_hold,2]-centers[start_hold,2]) if start_hold is not None else None,
               'final_material_surface_height_above_table_m':rows[-1]['material_surface_min_z']-.2,
               'full_vbd_calls':0, 'featherstone_calls':0,
               'scope':'Native contact candidates and mesh force eligibility at every saved state; includes contact radii/margins. Discrete geometry diagnostic, not a continuous collision proof. Numerical diagnostics do not assign human visual acceptance.',

@@ -17,24 +17,28 @@ os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--asset',type=Path,default=Path.home()/'下载/assets/w1-030/robot.urdf')
-    p.add_argument('--checkpoint',type=Path,default=ROOT/'checkpoints/mixed_course/last.pt')
+    p.add_argument('--checkpoint',type=Path,default=ROOT/'model_releases/shared_vbd_v24_cloth40/model.pt')
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--frames',type=int)
-    p.add_argument('--objects',choices=('blocks','cylinder_ball'),default='blocks')
-    p.add_argument('--style',choices=('overhead','front','side'),default='overhead')
-    p.add_argument('--friction',type=float,default=1.5)
+    p.add_argument('--objects',choices=('blocks','cylinder_ball'),default='cylinder_ball')
+    p.add_argument('--style',choices=('overhead','front','side'),default='side')
+    p.add_argument('--friction',type=float,default=2.5)
     p.add_argument('--soft-lambda',type=float,help='Lame bulk parameter; front defaults to nearly incompressible rubber')
     p.add_argument('--rigid-tangent-support-scale',type=float,help='Numerical friction support; side defaults to 64, other styles to 1')
     p.add_argument('--release',action='store_true',help='Gradually relax grip at 1.4 s, then allow a natural fall')
     p.add_argument('--resume-grasp',type=Path,help='Continue an independently recorded own-model grasp')
     p.add_argument('--resume-frame',type=int,default=84,help='Saved own-model frame to restore; verifies the following frame')
-    p.add_argument('--substeps',type=int,default=10)
+    p.add_argument('--substeps',type=int,default=3)
+    p.add_argument('--motion-budget',type=float,default=.012)
+    p.add_argument('--surface-tangent-history',action=argparse.BooleanOptionalAction,default=True)
     p.add_argument('--device',choices=('cuda:0','cpu'),default='cuda:0')
     p.add_argument('--window',action='store_true')
     a=p.parse_args()
     if a.frames is None:a.frames=180 if a.style=='side' else 168 if a.style in ('front','side') else 144 if a.release else 84
     if a.style in ('front','side') and a.release:p.error('Front grasp holds the payloads')
     if a.resume_frame<0:p.error('Nonnegative resume frame required')
+    if a.resume_grasp and a.surface_tangent_history:
+        p.error('Frame-only prefixes do not contain the accepted contact cache. Run a fresh current-mode trajectory, or use --no-surface-tangent-history for both matching legacy runs.')
     a.asset=a.asset.expanduser().resolve();a.checkpoint=a.checkpoint.expanduser().resolve();a.output=a.output.expanduser().resolve()
     if a.asset.is_dir():a.asset=a.asset/'robot.urdf'
     if a.frames<1 or a.substeps<1:p.error('Positive frames and substeps required')
@@ -72,20 +76,25 @@ def main():
     e=build(wp,newton,asset=a.asset,output=a.output,device=a.device,substeps=a.substeps,
             objects=a.objects,friction=a.friction,release=a.release,style=a.style,soft_lambda=a.soft_lambda)
     stored=torch.load(a.checkpoint,map_location='cpu',weights_only=True)
-    config=stored.get('model_config') or stored['config']['model']
+    config=dict(stored.get('model_config') or stored['config']['model'])
+    config.update(mimic_metric_tangent=True,periodic_bending=True)
     network=MixedSolver(config).to(a.device).eval();network.load_state_dict(stored['model'])
     if a.style in ('front','side'):network.config['line_search']=[2.**(-i) for i in range(13)]
     scene=export_model(e.model,configuration,'research.w1_dual_grasp',newton,e.sim_dt,a.device)
-    scene.metadata.update(detection_motion_budget=.003,bounded_motion_forecast_target_only=True,
+    scene.metadata.update(detection_motion_budget=a.motion_budget,bounded_motion_forecast_target_only=True,
         joint_tree_coarse_modes='scalar_tree_twelve_columns_v307',independent_object_motion_modes=True,joint_tree_extra_columns=8,
         separate_coarse_ray_step=a.style in ('front','side'),soft_tangent_support_scale=64. if a.style in ('front','side') else 8.,force_aware_material_anticipation=True,
-        compact_numerical_diagnostics=a.style not in ('front','side'))
+        compact_numerical_diagnostics=True,elastic_shape_response=True,
+        surface_tangent_memory=a.surface_tangent_history,surface_tangent_history_capacity=8192)
     scene.metadata['repair_native_mimic_roundoff']=a.style in ('front','side')
     scene.metadata['repair_metric_ray_roundoff']=a.style in ('front','side')
     requested_rigid_support=a.rigid_tangent_support_scale if a.rigid_tangent_support_scale is not None else 64. if a.style=='side' else 1.
     if not np.isfinite(requested_rigid_support) or requested_rigid_support<=0:raise ValueError('Positive finite rigid tangential support required')
     scene.metadata['rigid_tangent_support_scale']=requested_rigid_support
     solver=SurfaceJointExampleSolver(network,scene,e.sim_dt,wp,newton,e.model,e.state_0)
+    from wp_vbd.adaptive_step import AdaptiveStepConfig
+    solver.enable_adaptive_steps(AdaptiveStepConfig(maximum_dt=e.sim_dt,minimum_dt=min(e.sim_dt,1/600),
+        maximum_attempts=256,maximum_substeps=128))
     nn_calls=0;ray_roundoff_repairs=0
     def count(*args):
         nonlocal nn_calls
@@ -104,7 +113,7 @@ def main():
         table_audit=TableClearance(e.model,payload_id=e.payload_id)
     frames=0;steps=0;failure=None;begin=time.perf_counter()
     def record():
-        particles.append(e.state_0.particle_q.numpy().copy());bodies.append(e.state_0.body_q.numpy().copy());times.append(steps*e.sim_dt)
+        particles.append(e.state_0.particle_q.numpy().copy());bodies.append(e.state_0.body_q.numpy().copy());times.append(solver.physical_time)
         particle_velocity.append(e.state_0.particle_qd.numpy().copy());body_velocity.append(e.state_0.body_qd.numpy().copy())
         from scipy.spatial.transform import Rotation
         tool_positions.append(np.asarray([bodies[-1][i,:3]+Rotation.from_quat(bodies[-1][i,3:]).apply(offset)
@@ -178,6 +187,10 @@ def main():
           'checkpoint_sha256':checkpoint_sha,'checkpoint_step':stored['step'],'newton_source':provenance,
           'device':a.device,'physics_device':str(e.model.device),'physical_dt':e.sim_dt,'substeps':a.substeps,
           'physical_seconds':steps*e.sim_dt,'frames_completed':frames,'frames_requested':a.frames,'nn_backbone_calls':nn_calls,
+          'physical_substeps':solver.steps,'adaptive_retries':solver.adaptive_retries,
+          'adaptive_min_accepted_dt_s':solver.adaptive_min_accepted_dt,
+          'analytic_predictor_rounds':config.get('analytic_predictor_rounds',0),'model_unroll':config.get('unroll',1),
+          'detection_motion_budget_m':a.motion_budget,'surface_tangent_history':a.surface_tangent_history,
           'current_phase':phases[-1] if phases else 'initial',
           'grasp_continuation':branch,
           'forbidden_solver_calls':calls,'teacher_trajectory_reads':0,'optimizer_updates':0,

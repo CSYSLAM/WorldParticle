@@ -48,7 +48,8 @@ def relation_inputs(scene,state,start,extras,dt,feedback):
             theta=torch.atan2((torch.linalg.cross(n1,n2)*edge).sum(-1),(n1*n2).sum(-1))
             derivative=torch.autograd.grad(theta.sum(),points)[0]
         jac[:,sl,0,:,:3]=derivative
-        value[:,sl,0]=theta.detach()-scene.bend_angle[selected]
+        from .bending_angle import difference
+        value[:,sl,0]=difference(scene,theta.detach(),scene.bend_angle[selected])
         parameter[:,sl,0]=torch.log1p(scene.bend_material[selected,0]*scene.bend_length[selected])/10
         parameter[:,sl,1]=torch.log1p(scene.bend_material[selected,1]*scene.bend_length[selected]/dt)/10
     sl,selected=scene.structural_slices['joints']
@@ -192,18 +193,61 @@ class MixedSolver(nn.Module):
                     layer.checkpoint_block=attention_checkpoint
         self.register_buffer('trial_alphas',torch.tensor(config.get('line_search',[1.,.5,.25])),persistent=False)
         self.objective=incremental_objective
+        self.terminal_velocity = None
+        if config.get('terminal_velocity_correction', False):
+            from .terminal_velocity import TerminalVelocity
+            width=config.get('protected_width',32) if config.get('shared_terminal_velocity',False) else None
+            self.terminal_velocity = TerminalVelocity(shared_width=width)
+            if width is not None:self.protected_response.shared_velocity_features=True
+        self.elastic_shape_head = None
+        if config.get('learned_elastic_shape_direction', False):
+            from .elastic_shape_modes import ElasticShapeDirectionHead
+            self.elastic_shape_head = ElasticShapeDirectionHead(
+                width=config.get('elastic_shape_width',64),
+                maximum_fraction=config.get('elastic_shape_maximum_fraction',.08),
+                analytic_prior_fraction=config.get('elastic_shape_analytic_prior_fraction',.001),
+                learned_coefficient_scale=config.get('elastic_shape_learned_coefficient_scale',1.),
+                feature_version=config.get('elastic_shape_feature_version',1),
+                initialization=config.get('elastic_shape_head_initialization','zero'),
+                local_heads=config.get('elastic_shape_local_heads',0))
+            if config.get('elastic_shape_local_heads',0):self.architecture_id='shared_local_elastic_v22'
+        self.contact_tangent_head=None
+        if config.get('learned_contact_tangent_seed',False):
+            width=config.get('contact_tangent_width',32)
+            self.contact_tangent_head=nn.Sequential(nn.Linear(7,width),nn.SiLU(),
+                nn.Linear(width,width),nn.SiLU(),nn.Linear(width,2))
+            nn.init.normal_(self.contact_tangent_head[-1].weight,std=.01)
+            nn.init.zeros_(self.contact_tangent_head[-1].bias)
+            self.architecture_id='shared_contact_memory_v23'
+        if config.get('analytic_predictor_rounds',0):
+            if self.elastic_shape_head is not None:
+                raise ValueError('Analytic predictor uses physical elastic directions; disable learned elastic heads')
+            self.architecture_id='shared_analytic_predictor_v24'
         if config.get('compiled_objective',False):
             self.objective=torch.compile(incremental_objective,fullgraph=True,dynamic=False,options={'triton.cudagraphs':False})
 
     def forward(self,scene,start,dt,*,learned=True,force=None,torque=None):
+        self._elastic_shape_supervision_terms=[]
         if (getattr(self,'step_saved_tensors_on_cpu',False) and self.training
                 and torch.is_grad_enabled() and start.x.is_cuda):
             # Offload autograd's saved copies, preserving the actual state,
             # computation, dtype and complete contact graph. Nested encoder
             # and contact checkpoints retain their own execution policy.
             with torch.autograd.graph.save_on_cpu(pin_memory=False):
-                return self._forward_step(scene,start,dt,learned=learned,force=force,torque=torque)
-        return self._forward_step(scene,start,dt,learned=learned,force=force,torque=torque)
+                return self._step_with_velocity(scene,start,dt,learned,force,torque)
+        return self._step_with_velocity(scene,start,dt,learned,force,torque)
+
+    def _step_with_velocity(self,scene,start,dt,learned,force,torque):
+        shared_velocity=bool(self.config.get('shared_terminal_velocity',False))
+        if shared_velocity:self.protected_response.last_latent=None
+        result, diagnostic = self._forward_step(scene,start,dt,learned=learned,force=force,torque=torque)
+        if self.training and self._elastic_shape_supervision_terms:
+            diagnostic['elastic_shape_supervision']=torch.stack(self._elastic_shape_supervision_terms).mean()
+        if learned and self.terminal_velocity is not None:
+            features=self.protected_response.last_latent if shared_velocity else None
+            result = self.terminal_velocity(scene,start,result,dt,diagnostic['accepted'],features)
+        if shared_velocity:self.protected_response.last_latent=None
+        return result, diagnostic
 
     def _forward_step(self,scene,start,dt,*,learned=True,force=None,torque=None):
         from .self_contact_repair import configure
@@ -224,6 +268,7 @@ class MixedSolver(nn.Module):
                 for key in ('coarse_layout','_protected_topology','_hierarchy_plans','_transport_plans','_vector_active_components','_hierarchy_material_masks'):
                     if hasattr(target,key):delattr(target,key)
             target.elastic_prestress_metric=prestress
+            target.periodic_bending=bool(self.config.get('periodic_bending',False))
         if scene.metadata.get('contract') in ('rod_shape_contact_com_v40','rod_finite_joint_contact_com_v143','elastic_rod_surface_joint_self_contact_v222'):
             scene.rod_force_ports=bool(self.config.get('rod_contact_force_ports',False))
             scene.rod_prescribed_inputs=bool(self.config.get('rod_prescribed_fresh_inputs',False))
@@ -355,7 +400,11 @@ class MixedSolver(nn.Module):
         rejected_cost=start.x.new_zeros(start.x.shape[0],scene.n)
         feedback=start.x.new_ones(start.x.shape[0],scene.n)
         eye=torch.eye(6,device=start.x.device)
-        for _ in range(self.config.get('unroll',4)):
+        predictor_rounds=int(self.config.get('analytic_predictor_rounds',0))
+        phases=[]
+        for iteration in range(predictor_rounds+self.config.get('unroll',4)):
+            iteration_learned=learned and iteration>=predictor_rounds
+            phases.append({'phase':'neural_correction' if iteration_learned else 'analytic_predictor'})
             assembled=residual_system(scene,current,start,tx,tq,dt,batched=self.config.get('batched_jacobian',True),return_metric_base=bool(self.config.get('coarse_mode')))
             residual,blocks,extras=assembled[:3]
             if self.config.get('frozen_residual_backward',False) and torch.is_grad_enabled():
@@ -372,7 +421,7 @@ class MixedSolver(nn.Module):
             coarse=None
             jac=relation=None
             entity=encoded=None
-            if learned and not protected:
+            if iteration_learned and not protected:
                 entity=torch.cat(((current.x-scene.origins)/scene.length,start.v*dt/scene.length,(tx-current.x)/scene.length,so3.log(so3.multiply(tq,so3.conjugate(current.q))),torch.asinh(r/.1),physical*scene.generalized_scale),-1)
             response_residual=residual
             if self.config.get('coarse_mode'):
@@ -381,7 +430,7 @@ class MixedSolver(nn.Module):
                 jac,relation=relation_inputs(scene,current,start,extras,dt,feedback)
                 metric=FrozenMixedMetric(scene,current,start,tx,tq,dt,extras,jac,base=assembled[3],elastic_mode=self.config.get('coarse_metric','projected'))
                 gains=None
-                if learned and not protected and self.coarse_gain is not None:
+                if iteration_learned and not protected and self.coarse_gain is not None:
                     encoded=self.response.encode_entities(scene.layout,entity,relation)
                     gains=[self.coarse_gain(encoded[:,plan.ids].mean(1)) for plan in scene.coarse_layout.plans]
                     gains=[1+.5*gain.tanh() for gain in gains] if self.config.get('coarse_gain_mode')=='centered' else [1.9*gain.sigmoid() for gain in gains]
@@ -391,10 +440,10 @@ class MixedSolver(nn.Module):
                 if not protected:coarse_r,response_residual=coarse.residual_complement(residual)
             if protected:
                 from .protected_response import protected_update
-                update,coarse_value,valid=protected_update(self,scene,current,metric,coarse,residual,w,baseline,relation,physical,dt,learned)
+                update,coarse_value,valid=protected_update(self,scene,current,metric,coarse,residual,w,baseline,relation,physical,dt,iteration_learned)
                 coarse_r=coarse_value[...,None]
                 accepted=accepted&valid
-            elif learned:
+            elif iteration_learned:
                 if jac is None:jac,relation=relation_inputs(scene,current,start,extras,dt,feedback)
                 neural=self.response(scene.layout,response_residual,w,baseline,jac,entity,relation,encoded=encoded)
                 gain=self.config.get('response_gain',.1)
@@ -505,4 +554,4 @@ class MixedSolver(nn.Module):
             minimum=torch.minimum(minimum,used.amin(-1))
         result=State(current.x,current.q,(current.x-start.x)/dt,so3.log(so3.multiply(current.q,so3.conjugate(start.q)))/dt)
         finite=torch.stack([torch.isfinite(value).flatten(1).all(-1) for value in (result.x,result.q,result.v,result.omega)]).all(0)
-        return result,{'accepted':accepted&finite,'min_alpha':minimum,'rejected_entities':rejected_entities,'rejected_physical_step':rejected_step,'rejected_model_cost_change':rejected_cost,'numerical_root_entities':numerical_roots,'contact_safety':'ANALYTIC_PLANE_ROTATION_BOUND','architecture':self.architecture_id}
+        return result,{'accepted':accepted&finite,'iterations':phases,'min_alpha':minimum,'rejected_entities':rejected_entities,'rejected_physical_step':rejected_step,'rejected_model_cost_change':rejected_cost,'numerical_root_entities':numerical_roots,'contact_safety':'ANALYTIC_PLANE_ROTATION_BOUND','architecture':self.architecture_id}

@@ -16,6 +16,10 @@ from . import prescribed_motion as prescribed
 supports_rigid_component_batch = False
 contact_safety = 'BOUNDED_ENTITY_MOTION_AND_MATERIAL_ORIENTATION; FINITE_CONTACT_PENETRATION; NO_GENERAL_SURFACE_CCD_GUARANTEE'
 HISTORY_KEYS = pins.HISTORY_KEYS | {'joint_angle_prev'}
+
+
+def _tangent_history_enabled(scene):
+    return bool(scene.metadata.get('surface_tangent_memory',False))
 coarse = rigid.coarse
 path_feasible = pins.path_feasible
 
@@ -26,6 +30,17 @@ def pin_state(state):
 
 def validate_history(scene, start):
     expected=HISTORY_KEYS | (prescribed.HISTORY_KEYS if prescribed.enabled(scene) else set())
+    if _tangent_history_enabled(scene):
+        from .surface_tangent_memory import HISTORY_KEYS as tangent_keys
+        expected |= tangent_keys
+        if start.history is None:
+            raise ValueError('Complete accepted pin and joint-angle history required')
+        missing=tangent_keys-set(start.history)
+        if missing:
+            if missing != tangent_keys:
+                raise ValueError('Partial surface tangent history is not admissible')
+            from .surface_tangent_memory import initial_history
+            start.history.update(initial_history(start,scene.metadata['surface_tangent_history_capacity']))
     if start.history is None or set(start.history) != expected:
         raise ValueError('Complete accepted pin and joint-angle history required')
     pins.validate_history(scene, pin_state(start))
@@ -68,6 +83,16 @@ def begin(scene, start, candidates, dt, *, material_start_override=None):
                               previous_angle=start.history['joint_angle_prev'])
     context.joint_start = scene.joint_coordinates(material_start, context.previous_angle)
     context.targets, context.target_rates, context.efforts = scene.joint_controls
+    if _tangent_history_enabled(scene):
+        from .surface_tangent_memory import HISTORY_KEYS as tangent_keys, match_force
+        context.surface_tangent_history={key:start.history[key] for key in tangent_keys}
+        if context.surface_tangent_history['surface_contact_shape'].shape[1] < len(candidates.soft.shape):
+            raise ValueError('Current surface contact rows exceed the declared tangent-history capacity')
+        depth=candidates.soft.geometry(start,scene.body_com,jacobian=False)[-1]
+        normal_load=candidates.soft_material.stiffness[None]*depth.clamp_min(0)
+        sc.dual_t=match_force(candidates.soft,context.surface_tangent_history,
+                              normal_load,candidates.soft_material.friction)
+        context.dual_t=torch.cat((rc.dual_t,sc.dual_t),1)
     return context
 
 
@@ -206,6 +231,14 @@ def finish(scene, start, output, context, accepted):
     value = scene.joint_coordinates(output, context.previous_angle).axis[..., 3]
     angle = torch.where(scene.joint_spec.angular_mode == 1, value, 0.)
     history = {**output.history, 'joint_angle_prev':torch.where(accepted[:, None], angle, context.previous_angle)}
+    if _tangent_history_enabled(scene):
+        from .surface_tangent_memory import commit
+        # rows() synchronizes the child context before evaluating the final
+        # accepted force. The parent dual is then updated, so the child's
+        # value is one iteration old here.
+        first=context.contacts.rigid_count
+        final_tangent=context.dual_t[:,first:first+len(context.contacts.soft.shape)]
+        history.update(commit(context.contacts.soft,final_tangent,accepted,context.surface_tangent_history))
     velocity,omega=output.v,output.omega
     if prescribed.enabled(scene):
         history,velocity,omega=prescribed.commit(scene,start,output,context,accepted,history,velocity,omega)

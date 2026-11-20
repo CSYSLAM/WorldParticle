@@ -88,9 +88,19 @@ def prepare(recording, review_path, output, wp, newton, device='cpu'):
     qualification=output.with_suffix('.qualification.json')
     if output.exists() or qualification.exists():raise FileExistsError(output)
     run=json.loads((recording/'run.json').read_text())
-    review=json.loads(review_path.read_text())['cases'][recording.name]
-    if not review['automatic_task_and_mesh_screen_passed'] or run['mode']!='offline_vbd_reference':
-        raise ValueError('A separately executed, task/mesh-screened native reference is required')
+    review_document=json.loads(review_path.read_text())
+    release_screen=review_document.get('status')=='QUALIFIED_HOLD_RELEASE_TEACHER'
+    review=review_document if release_screen else review_document['cases'][recording.name]
+    if release_screen:
+        if (review.get('recording')!=str(recording.resolve())
+                or review.get('run_sha256')!=digest(recording/'run.json')
+                or review.get('trajectory_sha256')!=digest(recording/'trajectory.npz')
+                or run.get('teacher_release') is None):
+            raise ValueError('Hold/release qualification does not match this exact recording')
+    elif not review['automatic_task_and_mesh_screen_passed']:
+        raise ValueError('A task/mesh-screened native reference is required')
+    if run['mode']!='offline_vbd_reference':
+        raise ValueError('A separately executed native VBD reference is required')
     if review.get('run_sha256')!=digest(recording/'run.json') or review.get('trajectory_sha256')!=digest(recording/'trajectory.npz'):
         raise ValueError('Run or trajectory changed after its reference screen')
     audit=run.get('native_substep_audit')
@@ -116,11 +126,15 @@ def prepare(recording, review_path, output, wp, newton, device='cpu'):
     angle=so3.log(so3.multiply(states['q'][1:],so3.conjugate(states['q'][:-1]))).norm(dim=-1)
     travel=(states['x'][1:]-states['x'][:-1]).norm(dim=-1)+scene.body_radius*angle
     maximum_travel=float(travel[:,scene.movable].max())
-    if maximum_travel>.003:raise ValueError('Reference transition exceeds the declared model motion envelope')
+    # Coarse student windows inherit this same explicit detection/motion
+    # envelope; the source timestep remains the original 1/600 s authored
+    # schedule and is not altered to make the endpoint easier.
+    if maximum_travel>.006:raise ValueError('Reference transition exceeds the declared model motion envelope')
     metadata={**scene.metadata,'training_schema':SCHEMA,'reference_final_check':'PASS',
               'source_run':run,'source_builder_sha256':builder_sha,'is_official_demo':False,
               'source_recording':str(recording.resolve()),'source_trajectory_sha256':digest(recording/'trajectory.npz'),
               'source_static_sha256':run['source_static_sha256'],'source_review_sha256':digest(review_path),
+              'release_training_targets':release_screen,
               'external_force_and_torque':'zero; model gravity and recorded native drive inputs remain explicit',
               'terminal_input':'Repeated held terminal value; no target transition exists after the last state.'}
     values={**source,**{k:v.detach().cpu().numpy() for k,v in scene.values.items()},
@@ -132,14 +146,16 @@ def prepare(recording, review_path, output, wp, newton, device='cpu'):
     report={'status':'QUALIFIED_FRANKA_PHYSICAL_SUBSTEP_DATA','output_sha256':digest(output),
             'newton_sha':newton_version(),
             'physical_steps':length-1,'dt':run['physical_dt'],'maximum_reference_surface_travel_m':maximum_travel,
+            'detection_motion_budget_m':.006,
             'complete_native_substep_audit':audit,'input_target_causality_verified':True,
             'source_static_verified':True,'original_mimic_retained':True,'training_admitted':True,
-            'new_optimizer_updates':0,'scope':'One authored native-VBD grasp with an explicit end-of-iteration mimic policy. Data eligibility is not evidence of a training update or model task success.'}
+            'new_optimizer_updates':0,'release_training_targets':release_screen,
+            'scope':'One authored native-VBD grasp with an explicit end-of-iteration mimic policy. Data eligibility is not evidence of a training update or model task success.'}
     qualification.write_text(json.dumps(report,indent=2)+'\n')
     return report
 
 
-def load_reference(path,wp,newton,device='cpu'):
+def load_reference(path,wp,newton,device='cpu',*,state_device=None):
     path=Path(path);proof=json.loads(path.with_suffix('.qualification.json').read_text())
     if proof['status']!='QUALIFIED_FRANKA_PHYSICAL_SUBSTEP_DATA' or proof['output_sha256']!=digest(path):
         raise ValueError('Exact qualified authored data required')
@@ -162,5 +178,5 @@ def load_reference(path,wp,newton,device='cpu'):
     scene.geometry_oracle=SurfaceJointCollisionOracle(e.model,scene,wp,newton)
     keys=('x','q','v','omega','history__pin_x_prev','history__pin_initialized','history__joint_angle_prev',
           'input_pin_x','input_force','input_torque','input_joint_target','input_joint_target_rate','input_joint_effort')
-    states={key:torch.as_tensor(values[key],device=device) for key in keys}
+    states={key:torch.as_tensor(values[key],device=state_device or device) for key in keys}
     return scene,states

@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "completed_updates": 40,
+  "source_checkpoint_sha256": "5428975fe09bb5e64de4066796f75e2dd505b3c6c1472b6bba5eb138944b013a",
+  "selected_update": 40,
+  "autonomous_horizon": 24,
+  "gradient_horizon": 4,
+  "native_solver_calls_in_training": 0,
+  "development_metrics": [
+    {
+      "update": 0,
+      "cloth_loss": 0.6093191587488698,
+      "replay_loss": 0.5146914966836411
+    },
+    {
+      "update": 10,
+      "cloth_loss": 0.5770709570234227,
+      "replay_loss": 0.512684932691458
+    },
+    {
+      "update": 20,
+      "cloth_loss": 0.5564718427866454,
+      "replay_loss": 0.5104399344271187
+    },
+    {
+      "update": 30,
+      "cloth_loss": 0.5511954760066637,
+      "replay_loss": 0.5075846753781894
+    },
+    {
+      "update": 40,
+      "cloth_loss": 0.5152267861781088,
+      "replay_loss": 0.5066939682466304
+    }
+  ],
+  "training_trajectory_counts": {
+    "cloth_training": 6,
+    "cloth_development": 1,
+    "original_training_replay": 300,
+    "original_development": 30
+  },
+  "scope": "Cross-material development windows plus full downstream tasks; no exact optimizer resume state in this release."
+}

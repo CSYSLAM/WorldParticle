@@ -29,12 +29,16 @@ class SurfaceJointExampleSolver(MixedContactExampleSolver):
         spec = scene.joint_spec; initial = self.read(initial_native)
         value = scene.joint_coordinates(initial, spec.coordinate_offset[None, :, 3]).axis[..., 3]
         self.history['joint_angle_prev'] = torch.where(spec.angular_mode == 1, value, 0.).detach().clone()
+        if scene.metadata.get('surface_tangent_memory',False):
+            from .surface_tangent_memory import initial_history
+            self.history.update(initial_history(initial,scene.metadata['surface_tangent_history_capacity']))
         from . import prescribed_motion as prescribed
         if prescribed.enabled(scene):self.history.update(prescribed.initialize(scene,initial))
         names = ('body_q', 'shape_margin', 'shape_collision_radius', 'shape_flags', 'edge_rest_angle',
                  'edge_rest_length', 'joint_type', 'joint_parent', 'joint_child', 'joint_X_p', 'joint_X_c',
                  'joint_axis', 'joint_dof_dim', 'joint_q', 'joint_q_start', 'joint_qd_start', 'joint_target_q_start',
-                 'joint_mimic_joint', 'joint_mimic_coeffs')
+                 'joint_mimic_joint', 'joint_mimic_coeffs', 'joint_enabled', 'joint_target_ke', 'joint_target_kd',
+                 'joint_target_mode', 'joint_limit_lower', 'joint_limit_upper', 'joint_limit_ke', 'joint_limit_kd')
         for name in names:
             array = getattr(source_model, name, None)
             if array is not None: self.static_source[name] = wp.to_torch(array).clone()
@@ -55,12 +59,15 @@ class SurfaceJointExampleSolver(MixedContactExampleSolver):
 
     def refresh_control(self, control):
         model = self.source_model; scene = self.scene
-        spec = export_spec(model, scene.metadata['solver_configuration'], self.newton, str(scene.device), allow_mimic=True)
-        spec.owners = spec.owners+scene.metadata['particle_count']
-        for key in ('owners', 'source_joint_ids', 'frames', 'angular_mode', 'linear_axes', 'angular_axes',
-                    'coordinate_offset', 'rest_parent', 'rest_child', 'dof_index', 'target_index'):
-            if not torch.equal(getattr(spec, key), getattr(scene.joint_spec, key)):
-                raise ValueError('Mixed joint coordinates changed; rebuild scene/history: '+key)
+        if self.network.config.get('resident_static_structure',False):
+            spec=scene.joint_spec
+        else:
+            spec = export_spec(model, scene.metadata['solver_configuration'], self.newton, str(scene.device), allow_mimic=True)
+            spec.owners = spec.owners+scene.metadata['particle_count']
+            for key in ('owners', 'source_joint_ids', 'frames', 'angular_mode', 'linear_axes', 'angular_axes',
+                        'coordinate_offset', 'rest_parent', 'rest_child', 'dof_index', 'target_index'):
+                if not torch.equal(getattr(spec, key), getattr(scene.joint_spec, key)):
+                    raise ValueError('Mixed joint coordinates changed; rebuild scene/history: '+key)
         if control is None: control = model.control(clone_variables=False)
         values = read_controls(spec, control)
         if any(not bool(torch.isfinite(value).all()) for value in values):

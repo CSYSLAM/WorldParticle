@@ -69,7 +69,7 @@ class RigidCallerProgram:
         prepared=self.pose.apply(aligned,align_previous_output=False)
         return prepared,force,torque
 
-    def commit(self,output,memory,accepted):
+    def commit(self,output,memory,accepted,*,elapsed_steps=1):
         """Sample only an accepted predicted frame end; otherwise keep memory.
 
         Alignment preserves body origins, so the origin sampled after the
@@ -79,7 +79,11 @@ class RigidCallerProgram:
         self.validate(output,memory)
         if accepted.shape!=memory.phase.shape or accepted.dtype!=torch.bool or accepted.device!=output.x.device:
             raise ValueError('One explicit accepted-transaction bit per sequence required')
-        phase=(memory.phase+1)%self.steps_per_sample
+        if type(elapsed_steps) is not int or elapsed_steps<1:
+            raise ValueError('Positive integer elapsed caller ticks required')
+        if bool((memory.phase+elapsed_steps>self.steps_per_sample).any()):
+            raise ValueError('Split the physical interval at the caller sample boundary')
+        phase=(memory.phase+elapsed_steps)%self.steps_per_sample
         target=self.feedback.sample_target(output,memory.target,self.follow_axes,accepted&(phase==0))
         return CallerMemory(target,torch.where(accepted,phase,memory.phase),memory.align|accepted)
 

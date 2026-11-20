@@ -1,0 +1,161 @@
+{
+  "status": "SIX_TASKS_PASS",
+  "checkpoint_sha256": "1aac9909419fbb8dda7beef4f0d533050d4ce4191849ebd54ba37dd6a85a2132",
+  "newton_revision": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "device": "cuda:0",
+  "gpu": "NVIDIA GeForce RTX 5090 D v2",
+  "measurement_scope": "Actual run wall clock including physics, control, queries and recording; offline rendering excluded. Runs were not an isolated hardware benchmark; timing start boundaries differ slightly by runner.",
+  "cases": [
+    {
+      "scene": "franka_soft",
+      "status": "PASS",
+      "frames": 270,
+      "physical_seconds": 4.499999999999986,
+      "nominal_substeps": 3,
+      "physical_steps": 810,
+      "neural_calls": 810,
+      "adaptive_retries": 0,
+      "wall_seconds": 364.0414143949747,
+      "end_to_end_fps": 0.741673857214107,
+      "native_solver_calls": {
+        "vbd_construct": 0,
+        "vbd_step": 0,
+        "featherstone_construct": 0,
+        "featherstone_step": 0
+      },
+      "teacher_reads": 0,
+      "trajectory_sha256": "fc11c1d1b9724ed077b59a7bdfd28ed49a3666f0bf072cd4b88a00fabace241e"
+    },
+    {
+      "scene": "w1_bag",
+      "status": "PASS",
+      "frames": 288,
+      "physical_seconds": 4.799999999999985,
+      "nominal_substeps": 3,
+      "physical_steps": 877,
+      "neural_calls": 877,
+      "adaptive_retries": 0,
+      "wall_seconds": 623.7080607560347,
+      "end_to_end_fps": 0.4617544940030077,
+      "native_solver_calls": {
+        "vbd_construct": 0,
+        "vbd_step": 0,
+        "featherstone_construct": 0,
+        "featherstone_step": 0
+      },
+      "teacher_reads": 0,
+      "trajectory_sha256": "242c73c72b8a62ebcd1b54cdf84f3419eb41efd18e6114f0727f8a99d1d6c09b"
+    },
+    {
+      "scene": "franka_cloth",
+      "status": "PASS",
+      "frames": 168,
+      "physical_seconds": 2.7999999999999914,
+      "nominal_substeps": 3,
+      "physical_steps": 504,
+      "neural_calls": 504,
+      "adaptive_retries": 0,
+      "wall_seconds": 181.88131498300936,
+      "end_to_end_fps": 0.9236792686246738,
+      "native_solver_calls": {
+        "vbd_construct": 0,
+        "vbd_step": 0,
+        "featherstone_construct": 0,
+        "featherstone_step": 0
+      },
+      "teacher_reads": 0,
+      "trajectory_sha256": "5a4c0d3a3d15af2b371fbcceb845621181689c38ae7be3e0bea62957cf835c47"
+    },
+    {
+      "scene": "piper",
+      "status": "PASS",
+      "frames": 312,
+      "physical_seconds": 5.199999999999983,
+      "nominal_substeps": 3,
+      "physical_steps": 936,
+      "neural_calls": 936,
+      "adaptive_retries": 0,
+      "wall_seconds": 423.02849928603973,
+      "end_to_end_fps": 0.7375389613857541,
+      "native_solver_calls": {
+        "vbd_construct": 0,
+        "vbd_step": 0,
+        "featherstone_construct": 0,
+        "featherstone_step": 0
+      },
+      "teacher_reads": 0,
+      "trajectory_sha256": "4dda0096412624a53aac41c5885640c0b74143fec745d1ef8216e47f2121c85e"
+    },
+    {
+      "scene": "w1_dual",
+      "status": "PASS",
+      "frames": 180,
+      "physical_seconds": 3.0,
+      "nominal_substeps": 3,
+      "physical_steps": 540,
+      "neural_calls": 540,
+      "adaptive_retries": 0,
+      "wall_seconds": 268.4688932420104,
+      "end_to_end_fps": 0.6704687378352605,
+      "native_solver_calls": {
+        "vbd_construct": 0,
+        "vbd_step": 0,
+        "featherstone_construct": 0,
+        "featherstone_step": 0
+      },
+      "teacher_reads": 0,
+      "trajectory_sha256": "1fbbd4bdc2f9342b76c80bcf62706c16ad4da8676e68098c80f920bfa915a448"
+    },
+    {
+      "scene": "franka_rigid_cloth",
+      "status": "PASS",
+      "frames": 384,
+      "physical_seconds": 6.399999999999979,
+      "nominal_substeps": 3,
+      "physical_steps": 1152,
+      "neural_calls": 1152,
+      "adaptive_retries": 0,
+      "wall_seconds": 548.5205612470163,
+      "end_to_end_fps": 0.7000649148447738,
+      "native_solver_calls": {
+        "vbd_construct": 0,
+        "vbd_step": 0,
+        "featherstone_construct": 0,
+        "featherstone_step": 0
+      },
+      "teacher_reads": 0,
+      "trajectory_sha256": "3efc93335086d28002cb306e799c189674ac8c55fc11c8ffbb9a80d263eca750"
+    }
+  ],
+  "live_window_smoke_checks": {
+    "status": "PASS",
+    "cases": [
+      {
+        "scene": "cloth",
+        "exit_code": 0,
+        "frames": 1,
+        "neural_calls": 3,
+        "passed": true
+      },
+      {
+        "scene": "piper",
+        "exit_code": 0,
+        "frames": 1,
+        "neural_calls": 3,
+        "passed": true
+      },
+      {
+        "scene": "w1",
+        "exit_code": 0,
+        "frames": 1,
+        "neural_calls": 3,
+        "passed": true
+      }
+    ]
+  },
+  "limitations": [
+    "No all-42-demo rollout certification",
+    "No real-time speed claim",
+    "Saved-frame geometric checks are not a continuous nonpenetration proof"
+  ]
+}

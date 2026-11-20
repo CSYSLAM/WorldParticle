@@ -1,0 +1,88 @@
+{
+  "schema": "wp_shared_model_snapshot_v2",
+  "architecture": "shared_analytic_predictor_v24",
+  "model_class": "wp_vbd.mixed_solver.MixedSolver",
+  "active_neural_parameters": 46884109,
+  "active_parameter_prefixes": [
+    "protected_response.",
+    "terminal_velocity."
+  ],
+  "checkpoint": {
+    "file": "model.pt",
+    "bytes": 188146967,
+    "sha256": "1aac9909419fbb8dda7beef4f0d533050d4ce4191849ebd54ba37dd6a85a2132",
+    "step": 40,
+    "format": "torch.save inference checkpoint",
+    "optimizer_included": false,
+    "rng_included": false
+  },
+  "model_config_file": "model_config.json",
+  "snapshot_tag": "shared-vbd-v24-cloth40-20261120",
+  "source_branch": "research/shared-vbd-v24-20261120",
+  "environment": {
+    "newton_commit": "25298aea1691e060c86f95e8d2b773c898c006d3",
+    "python": "3.12",
+    "torch": "2.7.1+cu128",
+    "warp": "1.17.0"
+  },
+  "training": {
+    "parent_selected_step": 100,
+    "parent_checkpoint_sha256": "5428975fe09bb5e64de4066796f75e2dd505b3c6c1472b6bba5eb138944b013a",
+    "targeted_finetune_updates": 40,
+    "new_native_teacher_training_trajectories": 6,
+    "new_native_teacher_development_trajectories": 1,
+    "rejected_native_teacher_combinations": 5,
+    "autonomous_training_hops": 24,
+    "gradient_truncation_hops": 4,
+    "validation_loss_before": 0.6093191587488698,
+    "validation_loss_after": 0.5152267861781088,
+    "replay_loss_before": 0.5146914966836411,
+    "replay_loss_after": 0.5066939682466304
+  },
+  "qualification": "SIX_GPU_ROBOT_TASKS_VALIDATED_NOT_ALL_DEMOS_OR_REALTIME_CERTIFIED",
+  "limitations": [
+    "Inference weights only; optimizer and RNG are not included for exact training resumption.",
+    "No full-suite 42-demo certification for this fine-tune.",
+    "Measured end-to-end GPU output is about 0.46\u20130.92 FPS.",
+    "Robot assets and teacher datasets remain external.",
+    "Demo-specific numerical and control policies are fixed in the validation recipe."
+  ],
+  "download": {
+    "storage": "ordinary_git_parts_with_source",
+    "branch": "research/shared-vbd-v24-20261120",
+    "base_url": "https://raw.githubusercontent.com/CSYSLAM/WorldParticle/shared-vbd-v24-cloth40-20261120/model_releases/shared_vbd_v24_cloth40",
+    "parts": [
+      {
+        "file": "model.pt.part000",
+        "bytes": 33554432,
+        "sha256": "6d9427aaf19e8ae41d8a0bf92edaae6d43e2bbf03b7fef948dae2c61e76f7d11"
+      },
+      {
+        "file": "model.pt.part001",
+        "bytes": 33554432,
+        "sha256": "bae21cf6d12927525ca3c552f842cbe2d8efbab734b56bf87c8ee144bc709e46"
+      },
+      {
+        "file": "model.pt.part002",
+        "bytes": 33554432,
+        "sha256": "4a7c00b870bc56154d8c64ae4cbf277151a887e4b57cb2c6631b2f9c5d089551"
+      },
+      {
+        "file": "model.pt.part003",
+        "bytes": 33554432,
+        "sha256": "171938e471ad9dfa17041804eba8be4004e381ecb4281206fac75f599fa4f240"
+      },
+      {
+        "file": "model.pt.part004",
+        "bytes": 33554432,
+        "sha256": "cb879455a0a178b1e19baadec56b4cd77724236e060f546a811a14267af92fbc"
+      },
+      {
+        "file": "model.pt.part005",
+        "bytes": 20374807,
+        "sha256": "8a1bb14a3187c1a769577e149a7cb287d2970b58dfcb6ae6523e44432b6465c5"
+      }
+    ]
+  },
+  "source_checksum_file": "source_sha256.json"
+}

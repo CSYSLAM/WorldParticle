@@ -19,11 +19,11 @@ from .mixed_physics import joint_coordinates,joint_system,mass_whitening,predict
 from .runtime import CapturedStepper
 
 
-def load_sample(path,device='cuda:0'):
+def load_sample(path,device='cuda:0',*,state_device=None):
     with np.load(path,allow_pickle=False) as archive:
         metadata=json.loads(str(archive['metadata']))
         dynamic=('x','q','v','omega','input_x','input_q','input_force','input_torque')
-        states={key:torch.as_tensor(archive[key].copy(),device=device) for key in archive.files if key in dynamic or key.startswith('history__')}
+        states={key:torch.as_tensor(archive[key].copy(),device=state_device or device) for key in archive.files if key in dynamic or key.startswith('history__')}
         static={key:archive[key].copy() for key in archive.files if key not in (*states,'metadata')}
     return tensor_scene(static,metadata,device),states
 

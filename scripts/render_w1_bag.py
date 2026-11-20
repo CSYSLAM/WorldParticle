@@ -64,6 +64,9 @@ def main():
         e.state_0.body_q.assign(bodies[index]);e.state_0.particle_q.assign(particles[index])
         canvas=Image.new('RGB',(1920,900),(18,28,45));draw=ImageDraw.Draw(canvas)
         title='W1 asset geometry preview' if preview else f'W1 bag packing | shared model step {run["checkpoint_step"]} | {run["device"]} inference'
+        if run.get('analytic_predictor_rounds',0):
+            title+=f' | A{run["analytic_predictor_rounds"]}+N{run.get("model_unroll",1)}'
+            if run.get('analytic_elastic_postsolve',False):title+=' | elastic correction'
         draw.text((20,15),title,font=font,fill='white')
         for j,(position,target,label) in enumerate(cameras):
             if run.get('bag_grip')=='oblique' and j==1 and times[index]>=3.35:
@@ -100,7 +103,8 @@ def main():
             for index in range(len(times)):
                 last=frame(index)
                 if index in selected:thumbnails.append(Image.fromarray(last).resize((640,300)))
-                for _ in range(2):writer.send(last);count+=1
+                interval=times[index+1]-times[index] if index+1<len(times) else times[index]-times[index-1] if index else 1/60
+                for _ in range(max(1,round(float(interval)*fps/.25))):writer.send(last);count+=1
             for _ in range(30):writer.send(last);count+=1
         Image.fromarray(last).save(a.output.with_suffix('.final.png'))
         if thumbnails:

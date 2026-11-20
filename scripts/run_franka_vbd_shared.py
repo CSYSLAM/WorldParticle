@@ -25,12 +25,24 @@ os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output', type=Path, required=True)
-    p.add_argument('--checkpoint', type=Path, default=ROOT/'checkpoints/plateau_review_v303/shared_trial_2478.pt')
+    p.add_argument('--checkpoint', type=Path, default=ROOT/'model_releases/shared_vbd_v24_cloth40/model.pt')
     p.add_argument('--device', choices=('cuda:0','cpu'), default='cuda:0')
     p.add_argument('--gpu-memory-gib',type=float,default=12.,help='CUDA process budget including a two GiB native allocation reserve')
     p.add_argument('--frames', type=int, default=240)
-    p.add_argument('--substeps', type=int, default=10)
+    p.add_argument('--substeps', type=int, help='Defaults to 3 for model inference, 10 for the offline VBD reference')
+    p.add_argument('--request-dt',type=float,help='Model-only single physical step per output frame, e.g. 1/60 or 1/30 as a decimal')
+    p.add_argument('--disable-learning',action='store_true',help='Use the same physical-round budget with learned responses disabled')
+    p.add_argument('--contact-aware-warm-start',action=argparse.BooleanOptionalAction,default=True,
+                   help='Keep the initial free-flight candidate from closing static particle contacts; inertial targets are unchanged')
+    p.add_argument('--analytic-elastic-postsolve',action=argparse.BooleanOptionalAction,default=None,
+                   help='Explicit experiment: one reduced material correction after each response')
+    p.add_argument('--analytic-predictor-rounds',type=int,choices=(0,1,2,3),
+                   help='Explicit analytic budget override; neural response count is unchanged')
+    p.add_argument('--auto-retry-rejected-steps',action=argparse.BooleanOptionalAction,default=True,
+                   help='Rollback a rejected physical proposal, subdivide the requested interval and retry')
     p.add_argument('--start-time', type=float, default=0., help='Independently initialize at an authored command pose; never restore teacher state')
+    p.add_argument('--release-after',type=float,help='Smoothly open the hand after this authored time; preserve approach/pinch/lift controls before it')
+    p.add_argument('--release-duration',type=float,default=.15,help='Smooth gripper opening duration for a release teacher')
     p.add_argument('--resume-recording',type=Path,help='Continue an accepted rigid/cloth model recording, retaining its complete saved frame prefix')
     p.add_argument('--place-height',type=float,default=.29,help='Rigid/cloth tool drive target during release; actual pose remains dynamic')
     p.add_argument('--motion-budget',type=float,default=.003,help='Detection envelope in meters; exceeding it rejects the step')
@@ -48,10 +60,21 @@ def main():
     p.add_argument('--reference-record-substeps',action='store_true',help='Save native velocities, actual controls and source assets at every physical step; enables the substep audit')
     p.add_argument('--contact-mode',choices=('full','rigid_only','none'),default='full',help='Diagnostic isolation; only full is a grasp test')
     p.add_argument('--articulation-modes',action='store_true',help='Experimental bounded joint-tree physical response with unchanged network weights')
+    p.add_argument('--mimic-metric-tangent',action=argparse.BooleanOptionalAction,default=True,help='Match both mimic response projections to the frozen local inverse')
+    p.add_argument('--terminal-velocity',action=argparse.BooleanOptionalAction,default=True,help='Use the saved learned terminal velocity correction')
+    p.add_argument('--native-mimic-roundoff-repair',action=argparse.BooleanOptionalAction,default=True,
+                   help='Repair only bounded Float32 native-state mimic quantization, preserving strict joint tolerances')
     p.add_argument('--separate-coarse-step',action='store_true',help='Experimental separate curvature scaling for protected and complementary proposals')
     p.add_argument('--material-motion-modes',action='store_true',help='Experimental independent material motion in a single-material anchored-tree interaction')
     p.add_argument('--tangent-support-scale',type=float,default=1.,help='Numerical tangential response scale; friction coefficient and Coulomb force cap stay physical')
+    p.add_argument('--rigid-tangent-support-scale',type=float,default=1.,help='Numerical rigid-contact tangential support; Coulomb cap is unchanged')
     p.add_argument('--force-aware-anticipation',action='store_true',help='Use total material force when forecasting contact opening/activation')
+    p.add_argument('--learned-contact-memory',action=argparse.BooleanOptionalAction,default=False,help='Use accepted weighted-surface tangent memory and a learned Coulomb-bounded tangent seed')
+    p.add_argument('--surface-tangent-history',action=argparse.BooleanOptionalAction,default=True,
+                   help='Carry accepted matched surface tangential multipliers without enabling the learned seed')
+    p.add_argument('--contact-seed-scale',type=float,default=.1,
+                   help='Bounded learned tangent seed fraction of physical Coulomb capacity (0 to .25)')
+    p.add_argument('--elastic-local-heads',type=int,default=0,choices=(0,1,2),help='Learned spatially localized elastic response columns')
     p.add_argument('--grasp-x',type=float,default=-.005)
     p.add_argument('--grasp-height',type=float,default=.21,help='Tool height during pinch; align the finger pads to the material')
     p.add_argument('--grasp-yaw',type=float,default=0.,help='Tool yaw in radians')
@@ -66,13 +89,24 @@ def main():
     p.add_argument('--profile',action='store_true',help='Bounded CPU call statistics and neural/solver stream intervals; not a speed benchmark')
     p.add_argument('--exhaustive-line-search',action='store_true',help='Diagnostic reference: evaluate smaller rays even after all groups accept')
     a = p.parse_args()
+    if a.substeps is None:a.substeps=10 if a.reference else 3
     if a.soft_asset=='rigid_cloth' and (a.material_mu is not None or a.material_lambda is not None or a.grasp_yaw!=0.):
         p.error('Rigid/cloth scenes use authored cloth coefficients and a fixed tool orientation')
     if not math.isfinite(a.place_height) or not .2<=a.place_height<=.335:p.error('Place height must be in [0.2, 0.335] m')
+    if not math.isfinite(a.contact_seed_scale) or not 0<=a.contact_seed_scale<=.25:
+        p.error('--contact-seed-scale must be in [0, .25]')
     if a.resume_recording and (a.soft_asset!='rigid_cloth' or a.reference or a.start_time!=0.):
         p.error('Model-frame continuation requires rigid/cloth model mode with the original zero command origin')
     newton_provenance = source_record()
     if a.frames<1 or a.substeps<1: p.error('Positive frames/substeps required')
+    if a.request_dt is not None and (a.reference or not math.isfinite(a.request_dt) or a.request_dt<=0):
+        p.error('Positive finite --request-dt is available in model mode')
+    if a.release_after is not None and (not math.isfinite(a.release_after)
+            or not math.isfinite(a.release_duration) or a.release_after<a.start_time or a.release_duration<=0):
+        p.error('--release-after requires a finite event after start_time and a positive duration')
+    if a.release_after is None and a.release_duration!=.15:p.error('--release-duration requires --release-after')
+    if a.disable_learning and a.reference:p.error('--disable-learning is available in model mode')
+    if a.request_dt is not None and a.resume_recording:p.error('Macro-step recordings require a fresh independent run')
     if not math.isfinite(a.gpu_memory_gib) or a.gpu_memory_gib<=2:
         p.error('GPU budget must be finite and exceed the two GiB native reserve')
     if not 0<=a.start_time<=4 or not 0<a.motion_budget<float('inf'):
@@ -93,6 +127,8 @@ def main():
     if a.material_motion_modes and (a.reference or not a.articulation_modes):p.error('Material motion modes require model mode with --articulation-modes')
     if not 0<a.tangent_support_scale<float('inf') or a.reference and a.tangent_support_scale!=1.:
         p.error('Finite positive tangential scale is a model-only numerical setting')
+    if not 0<a.rigid_tangent_support_scale<float('inf') or a.reference and a.rigid_tangent_support_scale!=1.:
+        p.error('Finite positive rigid tangential scale is a model-only numerical setting')
     if not all(math.isfinite(value) for value in (a.grasp_x,a.grasp_yaw,a.grasp_height,a.grip_open,a.grip_closed)) or not 0<=a.grip_closed<=a.grip_open<=.04:
         p.error('Finite grasp targets and 0 <= closed <= open <= 0.04 m are required')
     if not a.reference and (a.reference_iterations!=10 or a.reference_body_particle_buffer!=256 or a.reference_rigid_buffer!=64 or a.reference_mimic_relaxation!=1. or a.reference_mimic_final_only or a.reference_audit_substeps or a.reference_record_substeps):
@@ -145,7 +181,10 @@ def main():
     begin = time.perf_counter(); e = build(wp, newton, device=a.device, soft_asset=a.soft_asset, substeps=a.substeps, start_time=a.start_time,
                                            material_mu=a.material_mu,material_lambda=a.material_lambda,arm_drive_ke=a.arm_drive_ke,
                                            grasp_x=a.grasp_x,grasp_yaw=a.grasp_yaw,grip_open=a.grip_open,grip_closed=a.grip_closed,friction=a.friction,
-                                           grasp_height=a.grasp_height,place_height=a.place_height)
+                                           grasp_height=a.grasp_height,
+                                           **({'place_height':a.place_height} if a.soft_asset=='rigid_cloth' else {}))
+    if a.request_dt is not None:
+        e.sim_dt=e.frame_dt=a.request_dt;e.sim_substeps=1
     if a.contact_mode!='full':
         flags=e.model.shape_flags.numpy()
         mask=int(newton.ShapeFlags.COLLIDE_PARTICLES)
@@ -173,8 +212,38 @@ def main():
         stored = torch.load(a.checkpoint, map_location='cpu', weights_only=True)
         checkpoint_step = stored['step']
         model_config = stored['model_config'] if 'model_config' in stored else stored['config']['model']
-        network = MixedSolver(model_config).to(a.device).eval()
-        network.load_state_dict(stored['model'])
+        saved_local_heads=model_config.get('elastic_shape_local_heads',0)
+        if a.elastic_local_heads>max(2,saved_local_heads):
+            p.error('Runtime local head count may not exceed the saved two-head architecture')
+        runtime_config={**model_config,'elastic_shape_local_heads':max(saved_local_heads,a.elastic_local_heads),
+                        'learned_contact_tangent_seed':bool(model_config.get('learned_contact_tangent_seed',False)
+                            or a.learned_contact_memory)}
+        if a.analytic_elastic_postsolve is not None:runtime_config['analytic_elastic_postsolve']=a.analytic_elastic_postsolve
+        if a.analytic_predictor_rounds is not None:runtime_config['analytic_predictor_rounds']=a.analytic_predictor_rounds
+        if a.mimic_metric_tangent is not None:runtime_config['mimic_metric_tangent']=a.mimic_metric_tangent
+        runtime_config['contact_aware_warm_start']=a.contact_aware_warm_start
+        network = MixedSolver(runtime_config).to(a.device).eval()
+        missing,unexpected=network.load_state_dict(stored['model'],strict=False)
+        allowed_missing=set()
+        for prefix,module in (('elastic_shape_head',network.elastic_shape_head),
+                              ('contact_tangent_head',network.contact_tangent_head)):
+            keys={prefix+'.'+name for name in module.state_dict()} if module is not None else set()
+            absent=keys & set(missing)
+            if prefix=='elastic_shape_head' and absent:
+                new={key for key in keys if '.local_network.' in key}
+                if absent==new:allowed_missing|=new
+                elif keys.issubset(missing):allowed_missing|=keys
+                else:raise ValueError('Incomplete checkpoint elastic shape head')
+            elif prefix=='contact_tangent_head' and absent:
+                if keys.issubset(missing):allowed_missing|=keys
+                else:raise ValueError('Incomplete checkpoint contact tangent head')
+        if set(missing)!=allowed_missing or unexpected:
+            raise ValueError(f'Unexpected runtime checkpoint migration: missing={missing}, unexpected={unexpected}')
+        if not a.terminal_velocity:network.terminal_velocity=None
+        if network.elastic_shape_head is not None:network.elastic_shape_head.local_heads=a.elastic_local_heads
+        network.config['elastic_shape_local_heads']=a.elastic_local_heads
+        network.config['learned_contact_tangent_seed']=bool(a.learned_contact_memory)
+        network.config['contact_tangent_seed_scale']=a.contact_seed_scale
         if a.resume_recording:
             previous=json.loads((a.resume_recording/'run.json').read_text())
             if previous['status']=='RUNNING':raise ValueError('A live model recording cannot be restored')
@@ -184,12 +253,18 @@ def main():
                 raise ValueError('Model weights, Newton source and physical timestep must match the prefix')
             if any(previous['forbidden_solver_calls'].values()) or previous['teacher_trajectory_reads']:
                 raise ValueError('Teacher/native-solver recordings are not model continuation inputs')
+            if (previous.get('mimic_metric_tangent',False)!=runtime_config.get('mimic_metric_tangent',False) or
+                    previous.get('contact_aware_warm_start',False)!=a.contact_aware_warm_start or
+                    previous.get('surface_tangent_history',False)!=bool(a.surface_tangent_history or a.learned_contact_memory) or
+                    previous.get('native_mimic_roundoff_repair',False)!=a.native_mimic_roundoff_repair):
+                raise ValueError('Continuation must preserve the recorded projection/contact policy; use explicit legacy flags or start a fresh recording')
             expected={'arm_drive_ke':a.arm_drive_ke,'joint_linear_ke':a.joint_linear_ke,'joint_angular_ke':a.joint_angular_ke,
                       'friction_override':a.friction,'grip_open':a.grip_open,'grip_closed':a.grip_closed,'grasp_height':a.grasp_height}
             if any(previous['physical_parameters'][key]!=value for key,value in expected.items()):
                 raise ValueError('Model continuation cannot change physical parameters')
             if (previous['articulation_modes']!=a.articulation_modes or previous['separate_coarse_step']!=a.separate_coarse_step or
                 previous['solver_parameters']['soft_tangent_support_scale']!=a.tangent_support_scale or
+                previous['solver_parameters'].get('rigid_tangent_support_scale',1.)!=a.rigid_tangent_support_scale or
                 previous['solver_parameters']['force_aware_material_anticipation']!=a.force_aware_anticipation):
                 raise ValueError('Model continuation requires the same physical response settings')
             with np.load(a.resume_recording/'trajectory.npz') as archive:
@@ -226,6 +301,7 @@ def main():
         scene.metadata['detection_motion_budget']=a.motion_budget
         scene.metadata['evaluate_all_line_search_rays']=a.exhaustive_line_search
         if a.compact_diagnostics:scene.metadata['compact_numerical_diagnostics']=True
+        scene.metadata['repair_native_mimic_roundoff']=a.native_mimic_roundoff_repair
         scene.metadata['bounded_motion_forecast_target_only']=True
         if a.articulation_modes:scene.metadata['joint_tree_coarse_modes']='scalar_tree_twelve_columns_v307'
         if a.separate_coarse_step:scene.metadata['separate_coarse_ray_step']=True
@@ -234,14 +310,30 @@ def main():
             if not a.articulation_modes:p.error('Rigid/cloth scenes require --articulation-modes')
             scene.metadata['independent_object_motion_modes']=True
         scene.metadata['soft_tangent_support_scale']=a.tangent_support_scale
+        scene.metadata['rigid_tangent_support_scale']=a.rigid_tangent_support_scale
         scene.metadata['record_grasp_forces']=True
         if a.force_aware_anticipation:scene.metadata['force_aware_material_anticipation']=True
+        if a.learned_contact_memory or a.surface_tangent_history:
+            scene.metadata['surface_tangent_memory']=True
+            scene.metadata['surface_tangent_history_capacity']=8192
+        network.config['learned_contact_tangent_seed']=bool(a.learned_contact_memory)
+        network.config['elastic_shape_local_heads']=a.elastic_local_heads
         solver = SurfaceJointExampleSolver(network, scene, e.sim_dt, wp, newton, e.model, e.state_0)
+        solver.learned=not a.disable_learning
+        if a.auto_retry_rejected_steps and e.sim_dt>=1/600-1e-12:
+            from wp_vbd.adaptive_step import AdaptiveStepConfig
+            solver.enable_adaptive_steps(AdaptiveStepConfig(maximum_dt=e.sim_dt,
+                minimum_dt=1/600,maximum_attempts=256,
+                maximum_substeps=128,motion_safety=.8,relative_update_limit=.15))
+        elif a.auto_retry_rejected_steps:
+            scene.metadata['adaptive_retry_bypassed_below_floor']=True
         if resume:
             if bool((scene.rest_x[scene.fixed_particle_ids]-solver.read(e.state_0).x[0,scene.fixed_particle_ids]).abs().max()>1e-8):
                 raise ValueError('Model-frame continuation admits unchanged static cloth clamps only')
             solver.history['pin_initialized'].fill_(True)
             solver.steps=resume['frames']*a.substeps
+            if solver.adaptive_stepper is not None:
+                solver.physical_time=resume['frames']*e.frame_dt
     if a.diagnose and network:
         from wp_vbd import rigid_contact_solver as algorithm, surface_joint_system as physics
         from wp_vbd.mimic_constraint import rows as mimic_rows
@@ -331,7 +423,8 @@ def main():
         hook=network.protected_response.hierarchy.register_forward_hook(count_nn)
     def record():
         particle.append(e.state_0.particle_q.numpy().copy())
-        body.append(e.state_0.body_q.numpy().copy()); times.append(steps*e.sim_dt)
+        physical_time=(solver.physical_time if network and solver.adaptive_stepper is not None else steps*e.sim_dt)
+        body.append(e.state_0.body_q.numpy().copy()); times.append(physical_time)
         newton.eval_ik(e.model,e.state_0,q_readout,qd_readout)
         joint_positions.append(q_readout.numpy().copy());joint_targets.append(e.control.joint_target_q.numpy().copy())
         particle_velocities.append(e.state_0.particle_qd.numpy().copy())
@@ -352,9 +445,22 @@ def main():
              'official_unchanged_demo':False,'robot_dynamics':'single VBD baseline' if a.reference else 'shared neural/physical response',
              'contact_mode':a.contact_mode,'is_grasp_test':a.contact_mode=='full',
              'articulation_modes':a.articulation_modes if network else False,
+             'mimic_metric_tangent':network.config.get('mimic_metric_tangent',False) if network else False,
+             'contact_aware_warm_start':network.config.get('contact_aware_warm_start',False) if network else False,
+             'terminal_velocity_enabled':network.terminal_velocity is not None if network else False,
+             'native_mimic_roundoff_repair':a.native_mimic_roundoff_repair if network else False,
+             'surface_tangent_history':bool(scene.metadata.get('surface_tangent_memory',False)) if network else False,
+             'native_roundoff_projection_count':getattr(solver,'native_roundoff_projection_count',0),
+             'maximum_native_position_correction_m':getattr(solver,'maximum_native_position_correction',0.),
              'separate_coarse_step':a.separate_coarse_step,
              'material_motion_modes':a.material_motion_modes,
              'solver_parameters':{'soft_tangent_support_scale':a.tangent_support_scale,
+                  'rigid_tangent_support_scale':a.rigid_tangent_support_scale,
+                  'contact_tangent_seed_scale':a.contact_seed_scale if a.learned_contact_memory else 0.,
+                  'automatic_rejected_step_recovery':bool(network and solver.adaptive_stepper is not None),
+                  'adaptive_max_dt_s':e.sim_dt if network and solver.adaptive_stepper is not None else None,
+                  'adaptive_min_dt_s':solver.adaptive_stepper.config.minimum_dt if network and solver.adaptive_stepper is not None else None,
+                  'adaptive_max_substeps_per_requested_interval':solver.adaptive_stepper.config.maximum_substeps if network and solver.adaptive_stepper is not None else None,
                   'evaluate_all_line_search_rays':a.exhaustive_line_search,
                   'force_aware_material_anticipation':a.force_aware_anticipation,
                   'model_unroll':network.config.get('unroll') if network else None,
@@ -369,16 +475,35 @@ def main():
              'neural_precision':precision.report() if precision else None,
              'compact_numerical_diagnostics':a.compact_diagnostics,
              'checkpoint':str(a.checkpoint) if network else None,'checkpoint_sha256':checkpoint_sha,'checkpoint_step':checkpoint_step,
+             'model_architecture':network.architecture_id if network else None,
+             'analytic_predictor_rounds':network.config.get('analytic_predictor_rounds',0) if network else 0,
+             'analytic_elastic_postsolve':bool(network.config.get('analytic_elastic_postsolve',False)) if network else False,
              'device':a.device,'physics_device':str(e.model.device),'physical_dt':e.sim_dt,'frame_dt':e.frame_dt,
-             'recording_stride_substeps':1 if a.reference_record_substeps else a.substeps,
+             'learning_enabled':not a.disable_learning,'requested_single_step_dt':a.request_dt,
+             'recording_stride_substeps':1 if a.reference_record_substeps else e.sim_substeps,
              'source_static_sha256':static_sha,'native_substep_audit':native_audit if a.reference else None,
              'solver_configuration':configuration,
              'initial_command_time':a.start_time,'independent_undeformed_soft_initialization':True,
+             'teacher_release':None if a.release_after is None else {'start_time_s':a.release_after,'duration_s':a.release_duration,
+                 'opening':'smoothstep from authored closed to open drive target'},
              'model_recording_continuation':resume['provenance'] if resume else None,
              'requested_window_completed':frames==a.frames,
              'full_authored_timeline_recorded':frames==a.frames and a.start_time==0 and steps*e.sim_dt>=(6.4 if a.soft_asset=='rigid_cloth' else 4.)-1e-9,
+             'payload_position':body[-1][e.payload_id,:3].tolist() if a.soft_asset=='rigid_cloth' and body else None,
              'detection_motion_budget':a.motion_budget if network else None,
-             'frames_completed':frames,'frames_requested':a.frames,'physical_substeps':steps,'physical_seconds':steps*e.sim_dt,
+             'frames_completed':frames,'frames_requested':a.frames,
+             'physical_substeps':solver.steps if network and solver.adaptive_stepper is not None else steps,
+             'physical_seconds':solver.physical_time if network and solver.adaptive_stepper is not None else steps*e.sim_dt,
+             'adaptive_requested_intervals':getattr(solver,'adaptive_requested_intervals',0) if network else 0,
+             'adaptive_accepted_substeps':getattr(solver,'adaptive_accepted_substeps',0) if network else 0,
+             'adaptive_retries':getattr(solver,'adaptive_retries',0) if network else 0,
+             'adaptive_recovery_modes':getattr(solver,'adaptive_recovery_counts',{}) if network else {},
+             'adaptive_solver_attempts':getattr(solver,'adaptive_solver_attempts',0) if network else 0,
+             'adaptive_recovery_attempts':getattr(solver,'adaptive_recovery_attempts',0) if network else 0,
+             'adaptive_response_rounds':getattr(solver,'adaptive_network_rounds',0) if network else 0,
+             'adaptive_min_accepted_dt_s':getattr(solver,'adaptive_min_accepted_dt',None) if network else None,
+             'adaptive_max_accepted_dt_s':getattr(solver,'adaptive_max_accepted_dt',None) if network else None,
+             'adaptive_counter_scope':'Committed requested intervals; failed-interval work is in last_diagnostic.adaptive.attempts. nn_backbone_calls and wall_seconds include all work.',
              'particle_count':e.model.particle_count,'tet_count':e.model.tet_count,'body_count':e.model.body_count,'joint_count':e.model.joint_count,
              'ideal_mimic_count':int((e.model.joint_mimic_joint.numpy()>=0).sum()),
              'forbidden_solver_calls':calls,'teacher_trajectory_reads':0,'new_optimizer_updates':0,
@@ -449,7 +574,14 @@ def main():
     try:
         with torch.no_grad():
             for frame in range(frames,a.frames):
-                phase=controller(e,a.start_time+frame*e.frame_dt,wp)
+                phase=controller(e,a.start_time+frame*e.frame_dt+(.5*e.frame_dt if a.request_dt else 0.),wp)
+                if a.release_after is not None and a.start_time+frame*e.frame_dt>=a.release_after:
+                    now=a.start_time+frame*e.frame_dt
+                    blend=float(np.clip((now-a.release_after)/a.release_duration,0.,1.))
+                    blend=blend*blend*(3.-2.*blend)
+                    target=float(a.grip_closed+(a.grip_open-a.grip_closed)*blend)
+                    wp.to_torch(e.control.joint_target_q)[-2:]=target
+                    if now>=a.release_after:phase='unload' if blend<1 else 'recovery'
                 if not a.reference_record_substeps:phases.append(phase)
                 for sub in range(e.sim_substeps):
                     e.state_0.clear_forces(); e.state_1.clear_forces()
@@ -501,7 +633,10 @@ def main():
                     if not viewer.is_running():break
                 if frames%10==0 or frames==1:
                     write('RUNNING');print(json.dumps({'event':'progress','frames':frames,'physical_seconds':steps*e.sim_dt,
-                                                     'phase':phase,'wall_seconds':time.perf_counter()-run_start}),flush=True)
+                                                     'phase':phase,
+                                                     'adaptive_substeps':getattr(solver,'steps',steps) if network and solver.adaptive_stepper is not None else steps,
+                                                     'adaptive_retries':getattr(solver,'adaptive_retries',0) if network and solver.adaptive_stepper is not None else 0,
+                                                     'wall_seconds':time.perf_counter()-run_start}),flush=True)
     except Exception:
         failure=traceback.format_exc(); print(failure,flush=True)
         if scene is not None and hasattr(scene,'candidates'):

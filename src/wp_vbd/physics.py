@@ -75,7 +75,8 @@ def elastic_nodes(scene, x):
                 edge = so3.normalize(pts[:, :, 3]-pts[:, :, 2])
                 theta = torch.atan2((torch.linalg.cross(n1, n2)*edge).sum(-1), (n1*n2).sum(-1))
                 k = scene.bend_material[valid, 0]*scene.bend_length[valid]
-                energy = 0.5*(k*(theta-scene.bend_angle[valid]).square()).sum()
+                from .bending_angle import difference
+                energy = 0.5*(k*difference(scene,theta,scene.bend_angle[valid]).square()).sum()
                 d = torch.autograd.grad(energy, xx, create_graph=x.requires_grad)[0]
             gradient = gradient+d
             metric = (scene.bend_material[valid, 0]/scene.bend_length[valid].clamp_min(1e-6)).repeat_interleave(4)

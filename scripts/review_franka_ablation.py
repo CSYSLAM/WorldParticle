@@ -32,10 +32,13 @@ def review(directory, log_path):
     centers = position.mean(1)
     hold = np.flatnonzero(phases == 'hold')
     hold_start = int(hold[0]) if len(hold) else None
-    hold_seconds = float(times[-1]-times[hold_start]) if hold_start is not None else 0.
+    # phase[i] labels [time[i], time[i+1]], not the endpoint state i.
+    hold_end = int(hold[-1])+1 if len(hold) else None
+    hold_seconds = float(times[hold_end]-times[hold_start]) if hold_start is not None else 0.
+    task_end=hold_end if hold_end is not None else len(times)-1
     window = (run['initial_command_time'] <= 1.3+1e-9 and
-              run['initial_command_time']+times[-1] >= 3.8-1e-9 and hold_seconds >= .49)
-    lift_value = float(centers[-1,2]-centers[0,2])
+              run['initial_command_time']+times[task_end] >= 3.8-1e-9 and hold_seconds >= .49)
+    lift_value = float(centers[task_end,2]-centers[0,2])
     lift = lift_value if np.isfinite(lift_value) else None
     # Same wrist/tool convention as franka_vbd_scene. A thrown object is
     # not a successful grasp even when its height increases dramatically.
@@ -44,10 +47,18 @@ def review(directory, log_path):
     offset = np.array([0.,0.,.22])
     tool = poses[:,6,:3]+offset+2*np.cross(q[:,:3],np.cross(q[:,:3],offset)+q[:,3:]*offset)
     relative = centers-tool
-    tracking = np.linalg.norm(relative-relative[:1],axis=-1)
+    # Measure drift from the held grasp, in actual hand coordinates. During
+    # approach the hand intentionally changes its distance from the object;
+    # treating the initial open-jaw pose as a grasp anchor rejects good lifts.
+    vector=-q[:,:3]
+    relative=relative+2*np.cross(vector,np.cross(vector,relative)+q[:,3:]*relative)
+    reference=hold_start if hold_start is not None else 0
+    tracking = np.linalg.norm(relative-relative[reference:reference+1],axis=-1)
+    distance = np.linalg.norm(relative,axis=-1)
     grasp_tolerance = max(.03,.5*float(np.linalg.norm(np.ptp(position[0],axis=0))))
-    final_tracking = float(tracking[-1]) if np.isfinite(tracking[-1]) else None
-    hold_tracking = float(tracking[hold_start:].max()) if hold_start is not None and np.isfinite(tracking[hold_start:]).all() else None
+    final_tracking = float(tracking[task_end]) if np.isfinite(tracking[task_end]) else None
+    hold_tracking = float(tracking[hold_start:task_end+1].max()) if hold_start is not None and np.isfinite(tracking[hold_start:task_end+1]).all() else None
+    held_distance = float(distance[hold_start:task_end+1].max()) if hold_start is not None and np.isfinite(distance[hold_start:task_end+1]).all() else None
     tool_error = run['tool_position_error_m']
     reasons = []
     if run['status'] != 'COMPLETE': reasons.append('Incomplete executed window')
@@ -58,7 +69,9 @@ def review(directory, log_path):
         reasons.append('Native reference log missing; contact overflow could not be screened')
     if not window: reasons.append('Complete closing/lift/hold window not recorded')
     if lift is None or lift < .02: reasons.append('Less than 2 cm final lift in this authored 12 cm lift task')
-    if final_tracking is None or final_tracking > grasp_tolerance or hold_tracking is not None and hold_tracking > grasp_tolerance:
+    if (final_tracking is None or final_tracking > grasp_tolerance
+            or hold_tracking is not None and hold_tracking > grasp_tolerance
+            or held_distance is None or held_distance > grasp_tolerance):
         reasons.append('Object does not remain near the gripper; lift alone is not successful grasp')
     if not np.isfinite(tool_error) or tool_error > .05:
         reasons.append('Gross tool tracking error exceeds the authored task tolerance of 5 cm')
@@ -100,13 +113,17 @@ def review(directory, log_path):
                'maximum_tet_volume_ratio':float(ratio[np.isfinite(ratio)].max()) if np.isfinite(ratio).any() else None,
                'final_relative_gripper_tracking_error_m':final_tracking,
                'maximum_hold_relative_gripper_tracking_error_m':hold_tracking,
+               'maximum_hold_center_to_tool_distance_m':held_distance,
+               'grasp_tracking_reference_state_index':reference,
                'relative_gripper_tracking_tolerance_m':grasp_tolerance,
                'final_nonpositive_tet_count':int((ratio[-1] <= 0).sum()),
                'first_nonpositive_tet_frame':int(np.flatnonzero(inverted)[0]) if bool(inverted.any()) else None,
                'contact_buffer_overflow_messages':overflow[:10], 'overflow_message_count':len(overflow),
                'native_log_available':log_path.exists(),
                'hold_seconds':hold_seconds,
-               'hold_center_vertical_change_m':float(centers[-1,2]-centers[hold_start,2]) if hold_start is not None else None,
+               'hold_end_index':hold_end,
+               'hold_center_vertical_change_m':float(centers[task_end,2]-centers[hold_start,2]) if hold_start is not None else None,
+               'post_hold_release_states_screened_separately':run.get('teacher_release') is not None,
                'automatic_task_and_mesh_screen_passed':not reasons, 'screen_failures':reasons,
                'training_admitted':False, 'new_optimizer_updates':run['new_optimizer_updates'],
                'nn_calls':run['nn_backbone_calls'], 'offline_vbd_steps':run['reference_vbd_steps'],

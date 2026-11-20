@@ -68,7 +68,8 @@ def damping_system(scene,x,previous,dt):
         old=dihedral(previous[:,ids])
         selected=scene.bending_indices
         coefficient=scene.bend_material[selected,1]*scene.bend_length[selected]/dt
-        force=jacobian*(theta-old)[...,None,None]*coefficient[None,:,None,None]
+        from .bending_angle import difference
+        force=jacobian*difference(scene,theta,old)[...,None,None]*coefficient[None,:,None,None]
         hessian=jacobian[...,None]*jacobian[...,None,:]*coefficient[None,:,None,None,None]
         residual=residual.index_add(1,ids.flatten(),force.flatten(1,2))
         blocks=blocks.index_add(1,ids.flatten(),hessian.flatten(1,2))
@@ -88,7 +89,8 @@ def damping_potential(scene,x,previous,dt):
         energy=energy.index_add(1,energy_owner(scene,getattr(scene,key)),term)
     if scene.material_damping_flags[2]:
         selected=scene.bending_indices;ids=scene.bend_edges[selected]
-        delta=dihedral(x[:,ids])-dihedral(previous[:,ids])
+        from .bending_angle import difference
+        delta=difference(scene,dihedral(x[:,ids]),dihedral(previous[:,ids]))
         term=.5*scene.bend_material[selected,1]*scene.bend_length[selected]/dt*delta.square()
         energy=energy.index_add(1,energy_owner(scene,ids),term)
     return energy

@@ -34,6 +34,11 @@ def export_model(model, configuration, identifier, newton, dt, device='cpu'):
                 'contacts': 'analytic_rigid_and_weighted_soft_features',
                 'joint_history_contract': 'single_axis_winding_v26',
                 'scope': 'Experimental shared elastic/contact/finite-joint path. Ideal scalar mimic and native per-configuration mesh force filtering are explicit. No self-contact, external ownership or full task claim.'}
+    # A fixed-size accepted cache is part of the surface solver contract. It
+    # is disabled by default so historical recordings and checkpoints remain
+    # byte-compatible; new training scenes opt in explicitly.
+    if metadata.get('surface_tangent_memory',False):
+        metadata['surface_tangent_history_capacity']=int(metadata.get('surface_tangent_history_capacity',8192))
     if len(mimic.pairs): metadata['ideal_mimic_contract'] = 'scalar_mass_tangent_v27'
     if bool((active & (wp.to_torch(model.shape_type).long() == int(newton.GeoType.MESH))).any()):
         metadata['contacts'] = 'analytic_and_native_filtered_mesh_rigid_and_weighted_soft_features'
@@ -79,7 +84,13 @@ class SurfaceJointScene(MixedContactScene):
         return incidence, kinds, enabled
 
     def update_graph(self, owners, active):
-        potential = tuple(self.joint_potential().tolist())
+        current=self.joint_potential()
+        previous=getattr(self,'_joint_potential_device',None)
+        if previous is not None and torch.equal(current,previous):
+            potential=self._joint_graph_signature
+        else:
+            potential = tuple(current.tolist())
+            self._joint_potential_device=current.detach().clone()
         if getattr(self, '_joint_graph_signature', None) != potential:
             self._graph_signature = None; self._joint_graph_signature = potential
         super().update_graph(owners, active)

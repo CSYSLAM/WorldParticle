@@ -1,59 +1,49 @@
-# 当前共享 VBD 模型架构
+# Current shared VBD architecture: v24
 
-更新日期：2026-11-17。本文说明源码中的实现及其验证边界；运行产物和原始数据不随源码发布；[step 156 完整检查点](../model_releases/shared_vbd_step156/README.md)在独立模型分支以分卷文件单独保存一版。
+The cross-type architecture is new research beyond the original WorldParticle.
+One `wp_vbd.mixed_solver.MixedSolver` checkpoint processes particles, cloth,
+rigid bodies, finite joints and rod/cable relations. Material, mass/inertia,
+friction, drives and timestep remain explicit inputs.
 
-最新任务、优势与 Newton VBD 的区别见 [框架评估](framework_assessment.md)。
+```mermaid
+flowchart TD
+    S[Asset, physical parameters, controls, accepted state/history] --> H[Bounded timestep and fresh collision query]
+    H --> A[Two analytic state-prediction rounds]
+    A --> E[Entity and relation features including material and timestep]
+    E --> B[Shared 648-dimensional backbone]
+    B --> L[Local relation pathway + merged component tokens]
+    L --> R[One learned response correction]
+    L --> V[Shared endpoint linear/angular velocity readout]
+    R --> M[Analytic material residual correction in 24-column basis]
+    M --> C[Curvature scaling, constraints and acceptance checks]
+    V --> C
+    C --> O[Commit accepted state and tangential contact history]
+    O --> H
+```
 
-![模型架构](architecture.svg)
+- Width 648, 12 attention heads, 6 encoder and 4 decoder layers, FFN width 1296.
+- Shared-response plus shared-velocity-head parameters: **46,884,109**.
+- Per physical step: two analytic prediction rounds and one neural round.
+  Nominal output schedule: three physical steps per 60 Hz output frame.
+- A 24-column low-frequency material space supplies analytic elastic residual
+  corrections. Learned elastic-direction and learned contact-seed heads are off
+  in the selected configuration.
+- Endpoint velocity uses this step's shared latent, not a second backbone pass.
+- Accepted Coulomb-bounded surface tangent history, metric-consistent mimic
+  projection and periodic bending differences remain explicit operators.
+- Contact-aware initialization and other numerical policies are recorded per
+  scene. Difficult intervals can be subdivided down to 1/600 s and are counted.
+- Neural and principal physical tensors execute on CUDA in GPU runs. Python,
+  asset/control work, synchronization and recording still have CPU costs.
 
-## 网络与统一表示
+Native VBD is an offline teacher/reference only. Model inference does not call
+VBD, Featherstone or a native-solver fallback. Substantial analytic physics
+remains; this model is not a direct single-pass state predictor.
 
-模型主体是 `MixedSolver` 内的共享 `protected_response`。实体先按类型编码到 648 维，物理关系保留原分辨率，通过关系消息和材料 FiLM 条件化；层次编码器对每个交互分量以 128 个 super-token 为合并目标，保留各对象时可能超过该软预算，6 层编码与 4 层解码均使用 12 头注意力，FFN 宽度为 1296。配置中的 legacy `width=64` 不代表共享主干宽度；共享主干由 `protected_width=648` 控制。完整分辨率关系旁路补回局部信息。方向保持的向量端口、受限逆响应替换和粗空间增益共同给出修正，活跃参数为 46,882,811。
+Selected artifact and exact configuration: [v24 cloth40 snapshot](../model_releases/shared_vbd_v24_cloth40/README.md).
+The six robot demos passed full-task checks, but measured end-to-end execution
+is only about 0.46–0.92 FPS. There is no demonstrated general speed advantage
+over native VBD and no all-42-demo rollout claim for this fine-tune.
 
-统一状态使用位置、四元数、线速度、角速度和历史量。粒子只开放 3 个平移自由度；刚体及 rod 段使用 6 槽自由度。关节是刚体之间的关系，包含锚点、轴、限位和驱动，而不是另一套独立场景网络。内部以质心定义刚体平移量，对接 Newton 时恢复原生状态。
-
-材料条件包括软体 Lamé 参数、布料膜/面积/弯曲刚度、rod 拉伸/剪切/弯曲/扭转及阻尼；刚体使用质量、质心和完整惯量；接触使用摩擦、法向刚度和阻尼。物理量通过时间步、质量和长度等尺度进入无量纲共享特征。数值运动预算、松弛和展开轮数与材料参数分开。
-
-## 一个物理子步
-
-1. 冻结时间步起点、控制输入和历史，查询真实接触候选，构造惯性/外力目标。
-2. 解析计算材料、有限关节和接触残差与小块响应。
-3. 构造有界粗空间和可学习逆响应，使用同一共享网络生成更新；当前每个子步 4 轮，四轮并不代表四次物理时间推进。
-4. 经曲率尺度、运动包络、接触修复及接受规则处理提议，原子提交状态与历史，再恢复速度。
-5. 写回 Newton 状态，供窗口或离线渲染使用。
-
-部署步进不构造完整 SolverVBD 或 SolverFeatherstone，不读取教师轨迹。解析小块算子、几何检查和有限修正是新求解器的一部分，全部计入耗时。当前允许小幅接触重叠，重点是避免大穿透及不合理变形；离散采样检查不构成连续无穿透证明。
-
-## 机器人、自由刚体与布料的运动空间
-
-默认粗空间仍保留已有 12 列路径。`independent_object_motion_modes` 为表面/有限关节契约显式启用独立对象模式：每个交互分量中，最多两个自由对象分别提供 6 个一致平移/旋转方向，另选最多 6 个关节树方向，总上限 18 列。机器人仍由有限驱动和接触作用推进；不把抓取物绑定到夹爪，也不写入脚本化物体位姿。
-
-18 列路径使用正物理能量嵌入及有限次正交化，避免进入只支持 6 列的打包分解路径。完整覆盖的自由刚体子空间具有严格为零的补空间，显式置零消除舍入残差造成的误拒。固定夹持点的空响应和零功曲率不再重复计算。以上不改变 648 维共享主干或参数量。
-
-`franka_rigid_cloth_scene.py` 构建 9 个机器人动态刚体、1 个自由刚体和 81 粒子布料，支架与地面提供固定环境。IK 只产生驱动目标。续算入口从本模型保存的完整已接受帧恢复状态，验证权重/资产/步长/物理参数，保留原轨迹前缀并记录中断的非完整步；当前支持固定布边和本场景内的关节转角分支。
-
-W1 在同一 18 列预算内可请求至多 8 列关节树方向，两个自由对象同组时仍收缩到至多 6 列。可选 `elastic_shape_response` 从每个真实材料对象的 6 个仿射应变和 18 个二次位移候选中去除刚体运动，用当前物理曲率求小型响应并压缩为每对象一列，再由现有共享粗空间头提供增益；该列占用现有预算，无新增参数或重训，每对象当前限 4096 节点。独立二次型、质量正交、刚体协变与零残差检查通过。
-
-侧夹与纸袋场景可显式调节数值切向支撑，并限制性修复原生 Float32 mimic 及双精度零方向舍入误差；真实毫米级约束错误、实际上坡、负曲率和非有限值仍拒绝。物理摩擦与 Coulomb 上限保留，但有限迭代轨迹会受数值设置影响。左爪换姿态属于控制/几何调整，不是网络新增避碰学习。
-
-## 离线数据与训练
-
-官方范围为 42 个纯 VBD demo；9 个外部后端耦合场景排除。另有五类混合对象场景与自建 Franka—软块场景，使用同一个网络。自建 Franka 保留原 URDF 质量、惯量和 mimic；离线单 VBD 参考显式改为每个物理步最后一轮投影 mimic，未修改 Newton 文件。这属于公开记录的数值适配，不是原封不动的官方 SolverVBD，也不进入模型推理。
-
-新抓取数据记录了 h=1/600 的 1500 个物理转移、实际控制和速度。数据检查绑定源资产及代码哈希，检查控制因果对齐、每个子步的四面体定向和 mimic 误差。当前研究训练在一条轨迹上使用不同阶段开发窗口，不宣称独立材料或形状泛化。
-
-两步自回归训练的状态项为 `1e4 × normalized_position_MSE + 100 × SO(3)_rotation_MSE`，另加原始提议对脱离计算图的局部修复目标的监督；修复项含 1000 系数。两个 hop 平均后乘 `((1/120)/h)^4`。AdamW 只更新共享 `protected_response`；新课程使用 1e-6 学习率和新优化器历史，不继承父检查点的合格状态。
-
-69 组旧数据原样保留，新增 1 组抓取数据；每轮 78 次更新，其中新抓取数据重复 9 次，两轮共 156 次。156 次更新已完成，最终开发复测因用户暂停而未完成，选中步数仍为 0。Franka 开发 loss 分别为 0.0390959、0.0394369、0.0398761；综合相对分数为 1.0000、1.0307、1.1537。比例分数可能受非常小的基准 loss 影响，必须同时看绝对误差和任务轨迹，不能宣布收敛。
-
-## 已验证和仍待验证
-
-2478 权重在 125 粒子软块、9 个机器人刚体的独立接近抓取状态下，h=1/600 推理 1.95 s，抬升约 9.93 cm，并保持半秒；末端位置误差约 1.97 cm。118 个记录状态的检查中没有四面体翻转，软体—机器人最大接触深度约 1.18 mm，刚体约 5.31 mm；这些数值不能证明所有子步或连续路径都无穿透。
-
-同初始状态和控制的 h=1/60 对照没有把软体抬起。早期 GPU 推理耗时 978.4 s，网络和物理更新均在 CUDA，离线视频渲染与诊断另行执行。完整官方 demo、留出材料/拓扑和实时速度仍未验收。
-
-2026-11-16 补充了 step 156 的实际任务检查：自建软块完整 4 秒动作抬升约 10.1 cm；新建刚体放布场景完成 6.4 秒物理时间，含 3840 个物理子步、385 个保存状态。刚体抬升约 9.1 cm、横移约 25.9 cm，松手及撤离后稳定在布面，布料中心额外下挠约 5.5 mm。最大刚体重叠约 5.16 mm，发生在取物台的夹取初段；刚体—布料重叠峰值约 0.044 mm，布料三角形面积比范围约 0.998–1.038。最终视频完整解码 475 帧，30 fps、15.83 秒，含半速播放及首尾停留。该记录经两次自身模型帧续算完成，不包含教师推进。任务成功并不改写上面的课程开发 loss 或权重资格结论。
-
-静态 mimic/关节树拓扑缓存与标量 Gram 快捷路径已完成 CPU / GPU 对照和失效检查。表面契约的分组线搜索在所有分组接受后提前结束，保留未接受分组的完整候选预算；短 Franka 窗口测得约 1.39 倍提速，不代表完整场景或实时性能。精简诊断保留数学计算和接受规则，只省略逐分量列表。CUDA Graph / BF16 为实验选项：当前小场景未观察到 Graph 提速，BF16 差异较大，默认仍为 FP32 / eager。
-
-下一步仍需复查损失与采样策略、增加材料和拓扑泛化数据、扩展多对象耦合并覆盖更多完整官方场景。本次 18 列模式限定至多两个自由对象，不代表任意对象数量或连续无穿透证明。
+See [the robot suite](robot_demo_suite.md), [cloth fine-tuning](robot_cloth_finetuning.md)
+and [analytic predictor/corrector design](analytic_predictor_corrector.md).

@@ -1,0 +1,72 @@
+{
+  "schema": "shared_vbd_robot_validation_v24",
+  "checkpoint": ".local/full_demo_20261119/selected.pt",
+  "checkpoint_sha256": "5428975fe09bb5e64de4066796f75e2dd505b3c6c1472b6bba5eb138944b013a",
+  "newton_root": ".local/newton_pinned_25298",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "scenes": {
+    "franka": {
+      "runner": "scripts/run_franka_vbd_shared.py",
+      "arguments": [
+        "--frames",
+        "270",
+        "--substeps",
+        "3",
+        "--release-after",
+        "3.8",
+        "--release-duration",
+        ".15",
+        "--arm-drive-ke",
+        "20000",
+        "--grasp-x",
+        "0",
+        "--grasp-yaw",
+        "-0.7853981633974483",
+        "--grip-closed",
+        ".024",
+        "--grasp-height",
+        ".21",
+        "--motion-budget",
+        ".012",
+        "--material-motion-modes",
+        "--articulation-modes",
+        "--force-aware-anticipation",
+        "--tangent-support-scale",
+        "8",
+        "--compact-diagnostics",
+        "--gpu-memory-gib",
+        "16",
+        "--mimic-metric-tangent",
+        "--surface-tangent-history",
+        "--native-mimic-roundoff-repair",
+        "--contact-aware-warm-start"
+      ],
+      "renderer": "scripts/render_franka_model_video.py"
+    },
+    "w1": {
+      "runner": "scripts/run_w1_bag.py",
+      "arguments": [
+        "--frames",
+        "288",
+        "--substeps",
+        "3",
+        "--motion-budget",
+        ".012",
+        "--friction",
+        "2.5",
+        "--bag-profile",
+        "flexible",
+        "--bag-grip",
+        "oblique",
+        "--soft-tangent-support-scale",
+        "512",
+        "--elastic-shape-response",
+        "--analytic-elastic-shape-response",
+        "--mimic-metric-tangent",
+        "--surface-tangent-history",
+        "--periodic-bending"
+      ],
+      "renderer": "scripts/render_w1_bag.py"
+    }
+  }
+}

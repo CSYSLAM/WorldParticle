@@ -77,9 +77,15 @@ def export_spec(model,configuration,newton,device='cpu',*,allow_mimic=False,allo
 def read_controls(spec,control):
     """Read absolute position targets, velocity targets and scalar efforts."""
     device=spec.frames.device
-    target=torch.as_tensor(control.joint_target_q.numpy(),device=device,dtype=torch.float64)
-    velocity=torch.as_tensor(control.joint_target_qd.numpy(),device=device,dtype=torch.float64)
-    effort=torch.as_tensor(control.joint_f.numpy(),device=device,dtype=torch.float64)
+    import warp as wp
+    def read(value):
+        if value is None or value.size==0:return torch.empty(0,device=device,dtype=torch.float64)
+        # Native CUDA arrays expose their storage directly. Controls never
+        # pass through numpy/host memory in the resident dynamics path.
+        return wp.to_torch(value).to(device=device,dtype=torch.float64)
+    target=read(control.joint_target_q)
+    velocity=read(control.joint_target_qd)
+    effort=read(control.joint_f)
     valid=spec.dof_index>=0;safe=spec.dof_index.clamp_min(0);qindex=spec.target_index.clamp_min(0)
     def gather(value,index):
         if not value.numel():

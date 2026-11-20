@@ -28,7 +28,7 @@ def restore_joint_source(model, source):
     return roundoff
 
 
-def load_reference(path, wp, newton, device='cpu'):
+def load_reference(path, wp, newton, device='cpu', *, state_device=None):
     from .official import make_example
     from .general_joint_data import set_controls
     with np.load(path, allow_pickle=False) as archive:
@@ -36,7 +36,7 @@ def load_reference(path, wp, newton, device='cpu'):
         values = {key: archive[key].copy() for key in archive.files if key != 'metadata'}
     if metadata.get('training_schema')=='authored_franka_substep_reference_v310':
         from .franka_reference_data import load_reference as load_authored_franka
-        return load_authored_franka(path,wp,newton,device)
+        return load_authored_franka(path,wp,newton,device,state_device=state_device)
     if metadata['contract'] != CONTRACT or metadata['reference_final_check'] != 'PASS':
         raise ValueError('Qualified complete surface/joint reference required')
     example, solvers, _ = make_example(metadata['official_demo'], reference=False, preserve_defaults=True)
@@ -66,7 +66,7 @@ def load_reference(path, wp, newton, device='cpu'):
     names = ('x', 'q', 'v', 'omega', 'history__pin_x_prev', 'history__pin_initialized',
              'history__joint_angle_prev', 'input_pin_x', 'input_joint_target',
              'input_joint_target_rate', 'input_joint_effort', 'input_force', 'input_torque')
-    states = {name: torch.as_tensor(values[name], device=device) for name in names}
+    states = {name: torch.as_tensor(values[name], device=state_device or device) for name in names}
     if any(not bool(torch.isfinite(value).all()) for value in states.values()):
         raise ValueError('Nonfinite weighted-contact training state or input')
     set_controls(scene, states, 0)

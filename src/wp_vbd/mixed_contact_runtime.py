@@ -1,5 +1,6 @@
 """Native particle/body I/O and independent geometry-only mixed queries."""
 import copy
+import math
 
 import torch
 from newton.solvers import SolverBase
@@ -62,7 +63,21 @@ class MixedContactExampleSolver(SolverBase):
         from .self_contact_repair import configure
         configure(scene,network.config)
         self.source_model = source_model; self.steps = 0; self.last_diagnostic = None; self.on_substep = None
+        self.adaptive_stepper = None
+        self.adaptive_requested_intervals=0
+        self.adaptive_accepted_substeps=0
+        self.adaptive_retries=0
+        self.adaptive_recovery_counts={}
+        self.adaptive_network_rounds=0
+        self.adaptive_solver_attempts=0
+        self.adaptive_recovery_attempts=0
+        self.adaptive_min_accepted_dt=None
+        self.adaptive_max_accepted_dt=None
+        self.physical_time = 0.
+        self.previous_dt = None
+        self.adaptive_control_callback = None
         self.oracle = oracle_type(source_model, scene, wp, newton)
+        scene.geometry_oracle=self.oracle
         self.history = {'pin_x_prev': scene.rest_x[scene.fixed_particle_ids][None].clone(), 'pin_initialized': torch.zeros(1, device=scene.device, dtype=torch.bool)}
         self._coupling_transaction=CoupledStepTransaction(scene.n)
         self._coupling_active=False;self._coupling_restarts_enabled=False;self.coupling_step_attempts=0
@@ -141,6 +156,8 @@ class MixedContactExampleSolver(SolverBase):
 
     @torch.no_grad()
     def step(self, state_in, state_out, control, contacts, dt, *, observables=None):
+        if self.adaptive_stepper is not None:
+            return self._adaptive_step(state_in,state_out,control,dt,observables=observables)
         saved={}
         if self._coupling_active:
             self.coupling_step_attempts+=1
@@ -157,11 +174,150 @@ class MixedContactExampleSolver(SolverBase):
             policy=getattr(self,'query_budget_policy',None)
             if policy is not None:policy.finish_attempt()
 
+    def validate_static_source(self,*,force=False):
+        """Immutable-asset mode validates at explicit boundaries, not every substep."""
+        resident=bool(self.network.config.get('resident_static_structure',False))
+        if resident and getattr(self,'_static_source_checked',False) and not force:return
+        for name,expected in self.static_source.items():
+            if not torch.equal(native_tensor(self.wp,getattr(self.source_model,name)),expected):
+                raise ValueError('Static source changed; rebuild scene: '+name)
+        self._static_source_checked=True
+
+    def enable_adaptive_steps(self, configuration=None):
+        from .adaptive_step import AdaptiveStepper
+        if self._coupling_active:
+            raise ValueError('Adaptive steps require direct ownership of the physical interval')
+        self.adaptive_stepper=AdaptiveStepper(configuration)
+        self.scene.metadata['adaptive_time_step_enabled']=True
+        self.scene.metadata['adaptive_time_step_max_dt']=self.adaptive_stepper.config.maximum_dt
+
+    def _repair_adaptive_proposal(self,current,h,time,info,allowance,solve):
+        """Repair the solve at fixed h; never commit a rejected candidate/history."""
+        config=self.network.config
+        head=getattr(self.network,'elastic_shape_head',None)
+        original=dict(config)
+        original_heads=getattr(head,'local_heads',0)
+        rounds=config.get('unroll',4)
+        relaxation=config.get('relaxation',.8)
+        ladder=(
+            ('seed_off',self.learned,original_heads,False,rounds,relaxation),
+            ('local_columns_off',self.learned,0,False,rounds,relaxation),
+            ('extra_rounds',self.learned,0,False,max(6,2*rounds),relaxation),
+            ('analytic_response_fallback',False,0,False,max(24,4*rounds),relaxation),
+            ('damped_analytic_fallback',False,0,False,max(32,6*rounds),min(.35,relaxation)),
+        )
+        recovery_attempts=[]
+        last=current.clone();last_info={**info,'accepted':False}
+        try:
+            for name,learned,local_heads,seed_enabled,count,relax in ladder[:allowance]:
+                config.update(unroll=count,rod_unroll=count,
+                              learned_contact_tangent_seed=seed_enabled,relaxation=relax)
+                if head is not None:head.local_heads=local_heads
+                trial,trial_info=solve(current.clone(),h,time,learned)
+                accepted,reason,update=self.adaptive_stepper.assess(
+                    current,trial,trial_info,h,self.scene.length)
+                recovery_attempts.append({'mode':name,'accepted':accepted,'reason':reason,
+                    'relative_velocity_change':update,'learned':learned,
+                    'network_rounds':len(trial_info.get('iterations',()))})
+                last=trial;last_info={**trial_info,'accepted':accepted}
+                if accepted:break
+        finally:
+            config.clear();config.update(original)
+            if head is not None:head.local_heads=original_heads
+        last_info['adaptive_recovery']={
+            'mode':recovery_attempts[-1]['mode'] if last_info['accepted'] else 'all_recovery_modes_rejected',
+            'attempts':recovery_attempts,'internal_dt':h}
+        return last,last_info
+
+    def _adaptive_step(self,state_in,state_out,control,dt,*,observables=None):
+        from .adaptive_step import motion_time_limit,AdaptiveStepFailure
+        if self._coupling_active or observables is not None or getattr(self,'query_budget_policy',None) is not None:
+            raise ValueError('Adaptive native integration requires owned state without an external query schedule')
+        self.validate_static_source()
+        self.refresh_control(control)
+        start=self.read(state_in)
+        self.validate_start(start)
+        ids=self.scene.fixed_particle_ids
+        travel=(start.x[:,ids]-self.history['pin_x_prev']).norm(dim=-1)
+        if bool(self.history['pin_initialized'].any()) and bool((travel>self.oracle.motion_budget).any()):
+            raise ValueError('Imposed particle motion exceeds detection envelope')
+        if not getattr(self.scene,'learned_contact_repair',False) and not bool(imposed_path_feasible(self.scene,start).all()):
+            raise ValueError('Imposed particle path collapses or reverses a material element')
+        n=self.scene.metadata['particle_count'];b=self.scene.metadata['body_count']
+        force=torch.zeros_like(start.x);torque=torch.zeros_like(start.omega)
+        if n:force[0,:n]=native_tensor(self.wp,state_in.particle_f).double()
+        if b:
+            wrench=native_tensor(self.wp,state_in.body_f).double()
+            force[0,n:n+b]=wrench[:,:3];torque[0,n:n+b]=wrench[:,3:]
+        if not bool(torch.isfinite(force).all()&torch.isfinite(torque).all()):
+            raise ValueError('Finite external forces required')
+        gravity=native_tensor(self.wp,self.source_model.gravity).double()
+        if gravity.shape!=(1,3) or not bool(torch.isfinite(gravity).all()):
+            raise ValueError('Invalid mixed gravity layout')
+        self.scene.values['gravity']=gravity[0]
+        def solve(current,h,time,learned):
+            if self.adaptive_control_callback is not None:
+                self.adaptive_control_callback(time)
+            self.refresh_control(control)
+            # Every solve owns its state/history, including recovery candidates.
+            proposal=current.clone()
+            self.scene.candidates=self.oracle.query(proposal)
+            self.scene.candidate_kind=self.scene.candidates.relation_kind
+            self.scene.geometry_oracle=self.oracle
+            return self.network(self.scene,proposal,h,learned=learned,force=force,torque=torque)
+        def attempt(current,h,time):
+            return solve(current,h,time,self.learned)
+        def repair(current,h,time,info,allowance):
+            return self._repair_adaptive_proposal(current,h,time,info,allowance,solve)
+        try:
+            result,report=self.adaptive_stepper.advance(
+                start,dt,attempt,start_time=self.physical_time,
+                events=getattr(self,'adaptive_event_times',()),previous_dt=self.previous_dt,
+                length_scale=self.scene.length,
+                step_limit=lambda current,time:motion_time_limit(
+                    self.scene,current,force,safety=self.adaptive_stepper.config.motion_safety),
+                repair_step=repair)
+        except AdaptiveStepFailure as error:
+            self.last_diagnostic={'accepted':False,'adaptive':{**error.report,'failure':str(error)}}
+            raise
+        # Publish native output only after the complete requested interval succeeds.
+        self._write_native_output(state_out,result)
+        self.history={} if result.history is None else {k:v.detach().clone() for k,v in result.history.items()}
+        self.steps+=report['substeps'];self.physical_time+=dt;self.previous_dt=report['last_dt']
+        self.adaptive_requested_intervals+=1
+        self.adaptive_accepted_substeps+=report['substeps']
+        self.adaptive_retries+=report['retries']
+        self.adaptive_network_rounds+=report['network_rounds']
+        self.adaptive_solver_attempts+=len(report['attempts'])
+        self.adaptive_recovery_attempts+=sum(row['mode']!='proposal' for row in report['attempts'])
+        accepted_dt=[row['dt'] for row in report['attempts'] if row['accepted']]
+        self.adaptive_min_accepted_dt=min(accepted_dt+[self.adaptive_min_accepted_dt or float('inf')])
+        self.adaptive_max_accepted_dt=max(accepted_dt+[self.adaptive_max_accepted_dt or 0.])
+        for info in report['diagnostics']:
+            mode=info.get('adaptive_recovery',{}).get('mode')
+            if mode:self.adaptive_recovery_counts[mode]=self.adaptive_recovery_counts.get(mode,0)+1
+        self.last_diagnostic={**report['diagnostics'][-1],
+                              'adaptive':{k:v for k,v in report.items() if k!='diagnostics'}}
+        if self.on_substep is not None:self.on_substep(state_out)
+
+    def _write_native_output(self,state_out,result):
+        n=self.scene.metadata['particle_count'];b=self.scene.metadata['body_count']
+        if n:
+            native_tensor(self.wp,state_out.particle_q).copy_(result.x[0,:n])
+            native_tensor(self.wp,state_out.particle_qd).copy_(result.v[0,:n])
+        if b:
+            pose=native_tensor(self.wp,state_out.body_q)
+            velocity=native_tensor(self.wp,state_out.body_qd)
+            pose[:,:3].copy_(result.x[0,n:n+b]-so3.rotate(result.q[0,n:n+b],self.scene.body_com[n:n+b]))
+            pose[:,3:].copy_(result.q[0,n:n+b])
+            velocity[:,:3].copy_(result.v[0,n:n+b])
+            velocity[:,3:].copy_(result.omega[0,n:n+b])
+
     def _step_impl(self, state_in, state_out, control, contacts, dt, *, observables=None):
         if observables is not None: raise ValueError('Mixed contact wrench export needs an explicit native readout contract')
-        if dt != self.dt: raise ValueError('Authored mixed timestep changed')
-        for name, expected in self.static_source.items():
-            if not torch.equal(native_tensor(self.wp, getattr(self.source_model, name)), expected): raise ValueError(f'Mixed static source changed; rebuild required: {name}')
+        if not math.isfinite(dt) or dt<=0 or dt != self.dt:
+            raise ValueError('Authored mixed timestep changed')
+        self.validate_static_source()
         gravity = self.wp.to_torch(self.source_model.gravity).double()
         if gravity.shape != (1, 3) or not bool(torch.isfinite(gravity).all()): raise ValueError('Invalid mixed gravity layout')
         self.refresh_control(control)
@@ -206,4 +362,6 @@ class MixedContactExampleSolver(SolverBase):
             velocity[:, :3].copy_(result.v[0, n:n+b]); velocity[:, 3:].copy_(result.omega[0, n:n+b])
         self.history = {key: value.detach().clone() for key, value in result.history.items()}
         self.steps += 1
+        self.physical_time += dt
+        self.previous_dt = dt
         if self.on_substep is not None: self.on_substep(state_out)

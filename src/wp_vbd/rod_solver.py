@@ -437,7 +437,16 @@ def step(model, scene, start, dt, learned, force, torque):
             good&=seed[:,ids].abs().amax((-1,-2))>0
             velocity_seed_used[:,ids]=good[:,None].expand(-1,len(ids))
         current=State(torch.where(velocity_seed_used[...,None],candidate.x,current.x),torch.where(velocity_seed_used[...,None],candidate.q,current.q),start.v,start.omega)
-    for _ in range(model.config.get('rod_unroll', model.config.get('unroll', 4))):
+    predictor_rounds=int(model.config.get('analytic_predictor_rounds',0))
+    phases=[]
+    for iteration in range(predictor_rounds+model.config.get('rod_unroll', model.config.get('unroll', 4))):
+        iteration_learned=learned and iteration>=predictor_rounds
+        phases.append({'phase':'neural_correction' if iteration_learned else 'analytic_predictor'})
+        if predictor_rounds and iteration:
+            interval_v=(current.x-start.x+rotate_pinned(current.q,scene.body_com)-rotate_pinned(start.q,scene.body_com))/dt
+            interval_w=so3.log(so3.multiply(current.q,so3.conjugate(start.q)))/dt
+            current=State(current.x,current.q,torch.where(scene.movable[None,:,None],interval_v,start.v),
+                          torch.where(scene.movable[None,:,None],interval_w,start.omega))
         evaluation = physical_rows(scene,current,context)
         displacement = current.x - target.x + (rotate_pinned(current.q, scene.body_com) - rotate_pinned(target.q, scene.body_com))
         rotation = so3.matrix(current.q)
@@ -461,7 +470,7 @@ def step(model, scene, start, dt, learned, force, torque):
         entity = torch.cat(((current.x - scene.origins) / scene.length, start.v * dt / scene.length, (target.x - current.x) / scene.length, so3.log(so3.multiply(target.q, so3.conjugate(current.q))), torch.asinh(r / .1), physical * scene.generalized_scale), -1)
         gains = None
         encoded = None
-        if learned and not protected:
+        if iteration_learned and not protected:
             encoded = model.response.encode_entities(scene.layout, entity, relation)
             if model.coarse_gain is not None:
                 plans=(material_plans if model.config.get('rod_material_twist_modes',False) else scene.rod_plans)+(scene.rod_cycle_plans if intrinsic else [])
@@ -476,12 +485,12 @@ def step(model, scene, start, dt, learned, force, torque):
         accepted &= coarse.valid & evaluation['in_domain'].all(-1)
         if protected:
             from .protected_response import protected_update
-            update,coarse_r,valid=protected_update(model,scene,current,metric,coarse,residual,w,baseline64,relation,physical,dt,learned)
+            update,coarse_r,valid=protected_update(model,scene,current,metric,coarse,residual,w,baseline64,relation,physical,dt,iteration_learned)
             accepted &= valid
         else:
             coarse_r = coarse(residual)
             complement = residual - metric(coarse_r)
-            if learned:local_update = model.response(scene.layout, complement, w, baseline, jac, entity, relation, encoded=encoded)
+            if iteration_learned:local_update = model.response(scene.layout, complement, w, baseline, jac, entity, relation, encoded=encoded)
             else:local_update = -(w @ baseline @ (w @ complement[..., None]))[..., 0]
             update = -coarse_r + local_update - coarse(metric(local_update))
         size = (update[..., :3] / scene.length).square().sum(-1) + update[..., 3:].square().sum(-1)
@@ -543,4 +552,4 @@ def step(model, scene, start, dt, learned, force, torque):
     def commit(value, old):
         return torch.where(accepted.reshape(batch, *([1] * (value.ndim - 1))), value, old)
     result = State(*(commit(getattr(result, key), getattr(start, key)) for key in ('x', 'q', 'v', 'omega')), {key: commit(value, start.history[key]) for key, value in history.items()})
-    return result, {'accepted': accepted, 'min_alpha': minimum, 'rejected_entities': rejected, 'rejected_physical_step': last_physical, 'rejected_model_cost_change': rejected_cost, 'numerical_root_entities': roots, 'roundoff_accepted_entities':roundoff_accepted,'merit_precision_budget':precision_budget,'velocity_seed_used':velocity_seed_used,'contact_safety': 'NO_ACTIVE_CONTACTS', 'architecture': model.architecture_id}
+    return result, {'accepted': accepted, 'iterations':phases,'min_alpha': minimum, 'rejected_entities': rejected, 'rejected_physical_step': last_physical, 'rejected_model_cost_change': rejected_cost, 'numerical_root_entities': roots, 'roundoff_accepted_entities':roundoff_accepted,'merit_precision_budget':precision_budget,'velocity_seed_used':velocity_seed_used,'contact_safety': 'NO_ACTIVE_CONTACTS', 'architecture': model.architecture_id}

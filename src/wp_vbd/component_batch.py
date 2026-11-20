@@ -94,16 +94,16 @@ class BatchedRigidCoarse:
     relative rank cutoff. Difficult/rank-deficient spaces use the old energy
     embedding and two MGS passes, without a ridge repair or VBD fallback.
     """
-    def __init__(self, scene, metric, blocks, *, rank_relative=1e-12):
+    def __init__(self, scene, metric, blocks, *, rank_relative=1e-12,maximum_columns=12):
         self.layout = layout(scene); self.packed = False; self.fallback = None
         from .protected_response import ProtectedCoarse
         with torch.no_grad():
             batch = len(metric.local)
             modes = metric.local.new_zeros(batch, scene.n, 6, 6)
             if not blocks:
-                self.fallback = ProtectedCoarse(scene, metric, blocks); return
+                self.fallback = ProtectedCoarse(scene, metric, blocks,maximum_columns=maximum_columns); return
             if any(z.shape[-1] != 6 for _, z, *_ in blocks):
-                self.fallback = ProtectedCoarse(scene, metric, blocks); return
+                self.fallback = ProtectedCoarse(scene, metric, blocks,maximum_columns=maximum_columns); return
             ids = torch.cat([plan.ids for plan, *_ in blocks])
             if len(ids) != int(scene.movable.sum()) or len(torch.unique(ids)) != len(ids) or not bool(scene.movable[ids].all()):
                 raise ValueError('Rigid component modes must cover every mobile entity exactly once')
@@ -126,7 +126,7 @@ class BatchedRigidCoarse:
             eigen = torch.linalg.eigvalsh(safe_correlation)
             safely_full_rank = (eigen[..., 0] > max(1e-8, 100 * rank_relative)) | ~active[None]
             if not bool((safely_full_rank & (info == 0)).all()) or not bool(valid.all() & finite.all()):
-                self.fallback = ProtectedCoarse(scene, metric, blocks)
+                self.fallback = ProtectedCoarse(scene, metric, blocks,maximum_columns=maximum_columns)
                 # Rank fallback must never erase a stale graph/invalid metric
                 # rejection discovered by the component ownership audit.
                 self.valid &= self.fallback.valid

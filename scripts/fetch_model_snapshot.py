@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--snapshot',type=Path,default=ROOT/'model_releases/shared_vbd_step156')
+    p.add_argument('--snapshot',type=Path,default=ROOT/'model_releases/shared_vbd_v24_cloth40')
     p.add_argument('--parts-dir',type=Path,help='Join already downloaded parts instead of fetching HTTP')
     args=p.parse_args();folder=args.snapshot.expanduser().resolve()
     manifest=json.loads((folder/'manifest.json').read_text());spec=manifest['checkpoint']
@@ -35,7 +35,8 @@ def main():
                 if Path(name).name!=name or not 0<row['bytes']<=32*1024**2:raise ValueError('Invalid part descriptor')
                 for attempt in range(3):
                     try:
-                        if args.parts_dir:data=(args.parts_dir/name).read_bytes()
+                        local=args.parts_dir/name if args.parts_dir else folder/name
+                        if args.parts_dir or local.is_file():data=local.read_bytes()
                         else:
                             with urlopen(manifest['download']['base_url']+'/'+name,timeout=45) as response:
                                 data=response.read(row['bytes']+1)

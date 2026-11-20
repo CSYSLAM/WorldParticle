@@ -11,7 +11,9 @@ import time
 import traceback
 
 ROOT=Path(__file__).resolve().parents[1]
-NEWTON=Path('/home/oem/code/engine/newton')
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.newton_source import source_root
+NEWTON=source_root()
 sys.path[:0]=[str(ROOT/'src'),str(NEWTON)]
 
 

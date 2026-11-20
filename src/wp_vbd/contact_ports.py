@@ -171,6 +171,16 @@ class PointPorts:
         return torch.einsum('rps,brsc->brpc', weights.to(velocity), velocity[:, ids, :3])
 
     def pullback(self, jacobian, covectors):
+        if jacobian is None:
+            if self.has_rigid or covectors.shape[1:]!=(len(self.owners),2,3):
+                raise ValueError('Factorized pullback requires complete particle port covectors')
+            # Particle ports have translation only. Accumulate three channels
+            # first, then append the nodal zero rotations, rather than creating
+            # a six-channel array for every candidate owner.
+            force=torch.einsum('rps,brpc->brsc',self.weights.to(covectors),covectors)
+            result=force.new_zeros(len(force),self.node_count,3)
+            result=result.index_add(1,self.ids.flatten(),force.flatten(1,2))
+            return torch.cat((result,torch.zeros_like(result)),-1)
         pair = self.owner_wrenches(jacobian, covectors)
         result = pair.new_zeros(len(pair), self.node_count, 6)
         return result.index_add(1, self.ids.flatten(), pair.flatten(1, 2))

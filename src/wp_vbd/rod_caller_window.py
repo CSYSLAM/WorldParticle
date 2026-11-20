@@ -1,4 +1,6 @@
 """Train a controlled rod window from its predicted state and caller memory."""
+import math
+
 from .rigid_caller_program import SCHEMA,CallerMemory,physical_state,attach_memory
 
 
@@ -8,7 +10,7 @@ def enabled(scene):
     return value==SCHEMA
 
 
-def step(network,scene,current,states,index,wp,*,before_model=None):
+def step(network,scene,current,states,index,wp,*,before_model=None,dt=None,learned=True):
     """One own query and NN call, followed by an accepted caller transaction.
 
     Only exogenous scalar controls are read from the per-step dataset. Pose
@@ -24,6 +26,13 @@ def step(network,scene,current,states,index,wp,*,before_model=None):
     if len(current.x)!=1:raise ValueError('One physical sequence per owned collision query required')
     memory=CallerMemory.from_history(current.history);physical=physical_state(current)
     program=scene.caller_program
+    tick=scene.metadata['dt'] if dt is None else dt
+    ratio=tick/scene.metadata['dt']
+    elapsed_steps=round(ratio) if math.isfinite(ratio) else 0
+    if elapsed_steps<1 or abs(ratio-elapsed_steps)>1e-8:
+        raise ValueError('Caller windows require complete original physical clock ticks')
+    if bool((memory.phase+elapsed_steps>program.steps_per_sample).any()):
+        raise ValueError('Split the student window at the caller sample boundary')
     if index<0:raise ValueError('Nonnegative caller input index required')
     def action(name):
         value=states['input_caller_'+name][index:index+1]
@@ -35,8 +44,9 @@ def step(network,scene,current,states,index,wp,*,before_model=None):
     from .rod_contact_data import query
     query(scene,prepared,wp)
     if before_model is not None:before_model()
-    predicted,diagnostic=network(scene,prepared,scene.metadata['dt'],force=force,torque=torque)
-    committed=program.commit(predicted,memory,diagnostic['accepted'])
+    predicted,diagnostic=network(scene,prepared,tick,
+                                 learned=learned,force=force,torque=torque)
+    committed=program.commit(predicted,memory,diagnostic['accepted'],elapsed_steps=elapsed_steps)
     diagnostic.update(caller_input_schema=SCHEMA,caller_controls_from_predicted_state=True,
         caller_target_refreshed=bool(((committed.phase==0)&diagnostic['accepted']).any()))
     if not bool(diagnostic['accepted'].all()):return current,diagnostic

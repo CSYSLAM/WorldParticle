@@ -8,7 +8,7 @@ from .general_joint_scene import export_model,JointContactScene
 from .rigid_contact_runtime import CollisionOracle
 
 
-def load_reference(path,wp,newton,device='cuda:0'):
+def load_reference(path,wp,newton,device='cuda:0',*,state_device=None):
     from .official import make_example
     with np.load(path,allow_pickle=False) as archive:
         values={key:archive[key].copy() for key in archive.files if key!='metadata'};metadata=json.loads(str(archive['metadata']))
@@ -54,25 +54,25 @@ def load_reference(path,wp,newton,device='cuda:0'):
     scene.current_device_static_roundoff=roundoff;scene.geometry_oracle=CollisionOracle(example.model,scene,wp,newton)
     states={}
     for key in ('x','q','v','omega'):
-        value=torch.as_tensor(values[key],device=device).double()
+        value=torch.as_tensor(values[key],device=state_device or device).double()
         if key=='q':value=so3.normalize(value)
         world=value.new_zeros(len(value),1,value.shape[-1])
         if key=='q':world[...,3]=1
         states[key]=torch.cat((value,world),1)
     constants=set(metadata.get('constant_time_inputs',()))
     for key in ('history__joint_angle_prev','input_joint_target','input_joint_target_rate','input_joint_effort'):
-        value=torch.as_tensor(values[key],device=device).double()
+        value=torch.as_tensor(values[key],device=state_device or device).double()
         if key in constants:
             if len(value)!=1:raise ValueError('Constant input must have exactly one stored time sample')
             value=value.expand(metadata['teacher_substeps'],*value.shape[1:])
         states[key]=value
     if metadata.get('prescribed_pose_history'):
         for key in ('history__prescribed_x_prev','history__prescribed_q_prev','input_prescribed_x','input_prescribed_q','input_prescribed_v','input_prescribed_omega'):
-            value=torch.as_tensor(values[key],device=device).double()
+            value=torch.as_tensor(values[key],device=state_device or device).double()
             if key.endswith('_q') or key.endswith('_q_prev'):value=so3.normalize(value)
             states[key]=value
-        states['history__prescribed_initialized']=torch.as_tensor(values['history__prescribed_initialized'],device=device,dtype=torch.bool)
-    wrench=torch.as_tensor(values['force'],device=device).double();wrench=torch.cat((wrench,wrench.new_zeros(len(wrench),1,6)),1)
+        states['history__prescribed_initialized']=torch.as_tensor(values['history__prescribed_initialized'],device=state_device or device,dtype=torch.bool)
+    wrench=torch.as_tensor(values['force'],device=state_device or device).double();wrench=torch.cat((wrench,wrench.new_zeros(len(wrench),1,6)),1)
     if 'force' in constants:
         if len(wrench)!=1:raise ValueError('Constant force must have exactly one stored time sample')
         wrench=wrench.expand(metadata['teacher_substeps'],*wrench.shape[1:])
@@ -82,7 +82,7 @@ def load_reference(path,wp,newton,device='cuda:0'):
 
 
 def set_controls(scene,states,index):
-    scene.joint_controls=tuple(states[key][index:index+1] for key in ('input_joint_target','input_joint_target_rate','input_joint_effort'))
+    scene.joint_controls=tuple(states[key][index:index+1].to(scene.device) for key in ('input_joint_target','input_joint_target_rate','input_joint_effort'))
 
 
 def apply_prescribed_input(scene,current,states,index):

@@ -1,0 +1,28 @@
+{
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "jobs": [
+    {
+      "id": "gripper_triangle",
+      "commands": [
+        {
+          "script": "scripts/collect_official_substeps.py",
+          "args": ["--worker", "vbd.example_vbd_gripper_soft_triangle", "--frames", "360", "--device", "cpu", "--test-final", "--output", "{output}/raw", "--reports", "{output}/collection_reports"]
+        },
+        {
+          "script": "scripts/prepare_surface_joint_tape.py",
+          "args": ["--demo", "vbd.example_vbd_gripper_soft_triangle", "--tape", "{output}/raw/vbd.example_vbd_gripper_soft_triangle", "--output", "{output}/gripper_triangle.npz", "--report", "{output}/gripper_triangle.qualification.json"]
+        }
+      ],
+      "scene": {
+        "dataset_id": "gripper_triangle_multirate",
+        "demo": "vbd.example_vbd_gripper_soft_triangle",
+        "loader": "surface",
+        "path": "{output}/gripper_triangle.npz",
+        "qualification": "{output}/gripper_triangle.qualification.json",
+        "train_start_range": [100, 4320],
+        "validation_starts": [4608, 5255, 5902, 6549, 7197],
+        "split": "disjoint_windows_development_only"
+      }
+    }
+  ]
+}

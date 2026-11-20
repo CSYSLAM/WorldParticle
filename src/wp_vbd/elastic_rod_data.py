@@ -80,7 +80,8 @@ def load_reference(path,wp,newton,device='cpu',*,state_device=None,allow_short_p
         raise ValueError('Unknown or missing mixed accepted history channels')
     if {k for k in values if k.startswith('input_')}!=set(TIME_INPUTS):
         raise ValueError('Unknown or missing exogenous mixed input channels')
-    newton_root=Path('/home/oem/code/engine/newton')
+    from .newton_source import source_root
+    newton_root=source_root()
     if subprocess.check_output(['git','rev-parse','HEAD'],cwd=newton_root,text=True).strip()!=metadata['newton_sha']:
         raise ValueError('Pinned Newton revision changed')
     factory=Path(__file__).with_name('native_assets.py' if metadata.get('asset_definition') else 'elastic_rod_demo.py')
@@ -157,7 +158,7 @@ def load_reference(path,wp,newton,device='cpu',*,state_device=None,allow_short_p
     return scene,states
 
 
-def step(network,scene,current,states,index,wp,*,before_model=None):
+def step(network,scene,current,states,index,wp,*,before_model=None,dt=None,learned=True):
     """One own geometry query and prediction; labels and future history unread."""
     from .self_contact_refresh import enabled as refresh_self_geometry
     from .self_contact_repair import configure
@@ -174,5 +175,6 @@ def step(network,scene,current,states,index,wp,*,before_model=None):
     candidates=scene.geometry_oracle.query(commanded)
     scene.candidates=candidates;scene.candidate_kind=candidates.relation_kind
     if before_model is not None:before_model()
-    predicted,diagnostic=network(scene,commanded,scene.metadata['dt'],force=force,torque=torque)
+    predicted,diagnostic=network(scene,commanded,scene.metadata['dt'] if dt is None else dt,
+                                 learned=learned,force=force,torque=torque)
     return (predicted if bool(diagnostic['accepted'].all()) else current),diagnostic

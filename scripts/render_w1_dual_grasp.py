@@ -72,6 +72,8 @@ def main():
         e.state_0.body_q.assign(bodies[index]);e.state_0.particle_q.assign(particles[index])
         canvas=Image.new('RGB',(1920,900),(18,28,45));draw=ImageDraw.Draw(canvas)
         title='W1 asset geometry preview' if preview else f'W1 dual grasp | shared model step {run["checkpoint_step"]} | {run["device"]} inference'
+        if not preview and run.get('analytic_predictor_rounds',0):
+            title+=f' | A{run["analytic_predictor_rounds"]}+N{run.get("model_unroll",1)}'
         draw.text((20,15),title,font=font,fill='white')
         for j,(position,target,label) in enumerate(cameras):
             viewer.set_camera(wp.vec3(*position));viewer.camera.look_at(np.array(target))
