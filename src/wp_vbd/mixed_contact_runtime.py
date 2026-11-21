@@ -50,10 +50,22 @@ class MixedCollisionOracle:
         return canonical_contacts(MixedContacts.snapshot(self.query_model, self.contacts, self.wp, state))
 
     def motion(self, start, trial):
-        angle = so3.log(so3.multiply(trial.q, so3.conjugate(start.q))).norm(dim=-1)
-        travel = (trial.x - start.x).norm(dim=-1) + self.scene.body_radius * angle
-        valid = torch.isfinite(travel).all(-1) & (travel[:, self.scene.movable] <= self.motion_budget).all(-1)
-        return valid, travel
+        if getattr(self.scene,'compiled_response_kernels',False) and not torch.is_grad_enabled() and start.x.is_cuda:
+            from .compiled_contact import evaluate as compiled
+            return compiled(_motion_tensor,start.x,start.q,trial.x,trial.q,
+                            self.scene.body_radius,self.scene.movable,self.motion_budget)
+        angle=so3.log(so3.multiply(trial.q,so3.conjugate(start.q))).norm(dim=-1)
+        travel=(trial.x-start.x).norm(dim=-1)+self.scene.body_radius*angle
+        valid=torch.isfinite(travel).all(-1)&(travel[:,self.scene.movable]<=self.motion_budget).all(-1)
+        return valid,travel
+
+
+def _motion_tensor(start_x,start_q,trial_x,trial_q,radius,movable,budget):
+    angle=so3.log(so3.multiply(trial_q,so3.conjugate(start_q))).norm(dim=-1)
+    travel=(trial_x-start_x).norm(dim=-1)+radius*angle
+    # Same predicate, without CUDA nonzero to discover the mask's length.
+    valid=torch.isfinite(travel).all(-1)&((travel<=budget)|~movable[None]).all(-1)
+    return valid,travel
 
 
 class MixedContactExampleSolver(SolverBase):
@@ -156,6 +168,13 @@ class MixedContactExampleSolver(SolverBase):
 
     @torch.no_grad()
     def step(self, state_in, state_out, control, contacts, dt, *, observables=None):
+        from .inference_policy import inference_settings
+        with inference_settings(self.network.config):
+            return self._step_with_execution_settings(state_in,state_out,control,contacts,dt,observables=observables)
+
+    def _step_with_execution_settings(self,state_in,state_out,control,contacts,dt,*,observables=None):
+        from .inference_policy import apply_scene
+        apply_scene(self.scene,self.network.config)
         if self.adaptive_stepper is not None:
             return self._adaptive_step(state_in,state_out,control,dt,observables=observables)
         saved={}

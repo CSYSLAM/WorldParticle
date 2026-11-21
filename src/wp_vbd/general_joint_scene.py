@@ -5,6 +5,7 @@ unchanged. ROD, particles, tendons and external ownership fail closed.
 """
 import numpy as np
 import torch
+from types import SimpleNamespace
 from . import math3d as so3
 from .data import State
 from .general_joint_export import export_spec
@@ -85,7 +86,25 @@ class JointContactScene(RigidContactScene):
             if hasattr(self,key):delattr(self,key)
 
     def joint_coordinates(self,state,previous,*,jacobian=True):
+        from .inference_kinematics import memoize,spec_tensors
+        return memoize('joint_coordinates',self,
+            (state.x,state.q,self.body_com,previous,*spec_tensors(self.joint_spec)),(jacobian,),
+            lambda:JointContactScene._joint_coordinates_uncached(self,state,previous,jacobian=jacobian))
+
+    def _joint_coordinates_uncached(self,state,previous,*,jacobian=True):
         ids=self.joint_spec.owners
+        if getattr(self,'compiled_kinematics',False) and not torch.is_grad_enabled() and state.x.is_cuda:
+            from .static_topology import tensor_versions
+            version=tensor_versions((self.joint_spec.angular_mode,))
+            cached=getattr(self,'_compiled_joint_modes',None)
+            if cached is None or version is None or cached[0]!=version:
+                cached=(version,not bool((self.joint_spec.angular_mode>=2).any()),self.joint_spec.angular_mode)
+                self._compiled_joint_modes=cached
+            if cached[1]:
+                from .compiled_contact import evaluate as compiled
+                values=compiled(coordinates,self.joint_spec,state.x[:,ids],state.q[:,ids],self.body_com[ids],
+                                previous_angle=previous,jacobian=jacobian,known_single_axis=True,return_tensors=True)
+                return SimpleNamespace(**dict(zip(('structural','structural_jacobian','axis','axis_jacobian','anchors','valid'),values)))
         return coordinates(self.joint_spec,state.x[:,ids],state.q[:,ids],self.body_com[ids],previous_angle=previous,jacobian=jacobian)
 
     def initial_state(self,model,wp):

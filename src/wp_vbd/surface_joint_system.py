@@ -72,6 +72,7 @@ def begin(scene, start, candidates, dt, *, material_start_override=None):
         if material_start_override.x.shape!=start.x.shape or material_start_override.q.shape!=start.q.shape:
             raise ValueError('Complete shared material-start pose layout required')
         material_start=material_start_override
+    candidates.soft.ports.compiled_response_kernels=bool(getattr(scene,'compiled_response_kernels',False))
     rc = rigid.begin(scene, start, candidates.rigid, dt); rc.material_start = material_start
     sc = surface.begin(candidates.soft, start, scene.body_com, inverse_mass(scene, start), dt,
                        candidates.soft_material, scene.metadata['friction_epsilon'], material_start=material_start,
@@ -81,6 +82,7 @@ def begin(scene, start, candidates, dt, *, material_start_override=None):
                               rho_t=torch.cat((rc.rho_t, sc.rho_t), 1),
                               dual_t=torch.cat((rc.dual_t, sc.dual_t), 1),
                               previous_angle=start.history['joint_angle_prev'])
+    sc.compiled_rows=bool(getattr(scene,'compiled_contact_rows',False))
     context.joint_start = scene.joint_coordinates(material_start, context.previous_angle)
     context.targets, context.target_rates, context.efforts = scene.joint_controls
     if _tangent_history_enabled(scene):
@@ -117,7 +119,8 @@ def rows(scene, state, start, context):
 
 def system(scene, state, start, tx, tq, context):
     residual, _, extras, base = residual_system(scene, state, context.material_start, tx, tq, context.dt, return_metric_base=True)
-    jacobian, _ = relation_inputs(scene.elastic_scene, state, context.material_start, extras, context.dt, torch.ones_like(state.x[..., 0]))
+    if getattr(scene,'fast_inference_assembly',False):jacobian=None
+    else:jacobian, _ = relation_inputs(scene.elastic_scene, state, context.material_start, extras, context.dt, torch.ones_like(state.x[..., 0]))
     elastic = FrozenMixedMetric(scene, state, context.material_start, tx, tq, context.dt, extras, jacobian, base=base, elastic_mode='objective')
     result = rows(scene, state, start, context)
     result['elastic_extras'] = extras
@@ -126,7 +129,8 @@ def system(scene, state, start, tx, tq, context):
     if getattr(scene, 'predictive_contact_metric', False):
         from .surface_contact_anticipation import metric as prepare
         joint_term = result['terms'][-1]
-        base_metric = rigid.ContactMetric(elastic.local, [*elastic.terms, joint_term], scene.dof)
+        base_metric = rigid.ContactMetric(elastic.local, [*elastic.terms, joint_term], scene.dof,
+            compiled_response_kernels=bool(getattr(scene,'compiled_response_kernels',False)))
         joint_residual = state.x.new_zeros(*state.x.shape[:2], 6).index_add(1, scene.joint_spec.owners.flatten(), result['joint_rows']['pair_residual'].flatten(1, 2))*scene.dof
         force_aware=bool(scene.metadata.get('force_aware_material_anticipation',False))
         anticipation_residual=residual+result['residual'] if force_aware else residual+joint_residual
@@ -134,17 +138,34 @@ def system(scene, state, start, tx, tq, context):
                                                force_aware_material=force_aware,dt=context.dt)
         result['topology_active'] = topology; result['valid'] = torch.cat((result['valid'], valid[:, None]), -1)
         context.anticipated_contacts = int((topology & ~result['active']).sum())
-    metric = rigid.ContactMetric(elastic.local, [*elastic.terms, *result['terms'], *anticipated], scene.dof)
+    metric = rigid.ContactMetric(elastic.local, [*elastic.terms, *result['terms'], *anticipated], scene.dof,
+        compiled_response_kernels=bool(getattr(scene,'compiled_response_kernels',False)))
     return (residual+result['residual'])*scene.dof, metric, result
 
 
 def merit(scene, state, start, tx, tq, context, frozen):
+    if (getattr(scene,'compiled_candidate_kernels',False)
+            and not torch.is_grad_enabled() and state.x.is_cuda):
+        # Preserve the port domain checks, but perform them once at the
+        # boundary of the fused material/contact energy calculation.
+        context.contacts.soft.ports._validate_state(state,scene.body_com)
+        joint=(joints.joint_energy(scene,state,context,frozen_bound=frozen['joint_rows']['bound_lower'])
+               if len(scene.joint_spec.owners) else None)
+        from .compiled_contact import evaluate as compiled
+        return compiled(_candidate_merit_tensor,scene,state,start,tx,tq,context,frozen,joint)
     empty = state.x.new_empty(len(state.x), 0)
     energy = incremental_objective(scene, state, context.material_start, tx, tq, context.dt, empty)
     energy = energy+rigid.merit(scene, state, start, tx, tq, context.rigid, frozen['rigid_rows'], include_inertia=False)
     soft = context.contacts.soft
     pair = surface.merit(soft, state, scene.body_com, context.soft, frozen['soft_rows'])
-    ids = soft.ports.ids
+    energy=_add_soft_merit(scene,soft,energy,pair)
+    if not len(scene.joint_spec.owners):return energy
+    joint = joints.joint_energy(scene, state, context, frozen_bound=frozen['joint_rows']['bound_lower'])
+    return _add_joint_merit(scene,energy,joint)
+
+
+def _add_soft_merit(scene,soft,energy,pair):
+    ids=soft.ports.ids
     mobile = scene.movable[ids] & (soft.ports.owners >= 0) & (soft.ports.weights > 0).any(1)
     count = mobile.sum(-1).clamp_min(1)
     for slot in range(ids.shape[1]):
@@ -152,11 +173,25 @@ def merit(scene, state, start, tx, tq, context, frozen):
         # owners then allocate 1.0000000298 times the FP64 contact energy.
         share = mobile[:, slot].to(energy.dtype)/count
         energy = energy.index_add(1, ids[:, slot], pair*share[None])
-    if not len(scene.joint_spec.owners):return energy
-    joint = joints.joint_energy(scene, state, context, frozen_bound=frozen['joint_rows']['bound_lower'])
+    return energy
+
+
+def _add_joint_merit(scene,energy,joint):
     ids = scene.joint_spec.owners; mobile = scene.movable[ids]; count = mobile.sum(-1).clamp_min(1)
     for side in (0, 1): energy = energy.index_add(1, ids[:, side], joint*(mobile[:, side]/count)[None])
     return energy
+
+
+def _candidate_merit_tensor(scene,state,start,tx,tq,context,frozen,joint):
+    """Same energy and owner distribution, with validated pure geometry."""
+    empty=state.x.new_empty(len(state.x),0)
+    energy=incremental_objective(scene,state,context.material_start,tx,tq,context.dt,empty)
+    energy=energy+rigid._merit(scene,state,start,tx,tq,context.rigid,frozen['rigid_rows'],
+                              include_inertia=False,tensor_geometry=True)
+    soft=context.contacts.soft
+    pair=surface._merit_tensor(soft,state,scene.body_com,context.soft,frozen['soft_rows'])
+    energy=_add_soft_merit(scene,soft,energy,pair)
+    return energy if joint is None else _add_joint_merit(scene,energy,joint)
 
 
 def relation_features(scene, state, start, context, result, feedback):
@@ -197,7 +232,9 @@ def acceptance_groups(scene, candidates, depth, travel, *, labels=False, metric_
     active = (depth[0]+motion >= 0) & (candidates.material > 0)
     if metric_active is not None: active = active | metric_active[0]
     incidence, kinds, enabled = scene.all_relations(owners, active)
-    graph = build_topology(scene.kind, scene.movable, scene.object_id, incidence, kinds, potential_active=enabled)
+    fast=bool(getattr(scene,'fused_physical_checks',False))
+    graph = build_topology(scene.kind, scene.movable, scene.object_id, incidence, kinds, potential_active=enabled,
+                           make_slots=not fast,fused_host=fast)
     if labels: return graph.interaction_id
     return [torch.where(graph.interaction_id == key)[0] for key in torch.unique(graph.interaction_id).tolist() if bool(scene.movable[graph.interaction_id == key].any())]
 

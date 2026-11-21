@@ -47,5 +47,6 @@ def scale_proposal(scene, metric, residual, update):
                                 'metric_curvature':denominator.cpu().tolist(),'scale':scale.cpu().tolist(),
                                 'valid':good.cpu().tolist()})
             if getattr(scene,'metadata',{}).get('repair_metric_ray_roundoff',False):
-                details[-1]['roundoff_null_repaired']=repaired.cpu().tolist()
+                details[-1]['roundoff_null_repaired']=(repaired.detach() if getattr(scene,'compiled_response_kernels',False)
+                                                         else repaired.cpu().tolist())
     return update*scales[...,None],valid,details

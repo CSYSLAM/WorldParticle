@@ -27,7 +27,8 @@ def joint_rows(scene,state,context,*,frozen_bound=None):
     current=scene.joint_coordinates(state,context.previous_angle)
     spec=scene.joint_spec
     if scene.metadata.get('prescribed_pose_history'):spec=SimpleNamespace(**{**vars(spec),'enabled':spec.enabled&scene.movable[spec.owners].any(-1)})
-    result=evaluate(spec,current,context.joint_start,context.dt,context.targets,context.target_rates,frozen_bound=frozen_bound)
+    result=evaluate(spec,current,context.joint_start,context.dt,context.targets,context.target_rates,frozen_bound=frozen_bound,
+                    compiled=bool(getattr(scene,'compiled_kinematics',False)))
     # Scalar joint efforts perform virtual work in the same objective axes.
     enabled=spec.enabled[None,:,None]
     effort=context.efforts*enabled
@@ -40,7 +41,8 @@ def joint_energy(scene,state,context,*,frozen_bound=None):
     current=scene.joint_coordinates(state,context.previous_angle,jacobian=False)
     spec=scene.joint_spec
     if scene.metadata.get('prescribed_pose_history'):spec=SimpleNamespace(**{**vars(spec),'enabled':spec.enabled&scene.movable[spec.owners].any(-1)})
-    result=evaluate(spec,current,context.joint_start,context.dt,context.targets,context.target_rates,frozen_bound=frozen_bound,derivatives=False)
+    result=evaluate(spec,current,context.joint_start,context.dt,context.targets,context.target_rates,frozen_bound=frozen_bound,derivatives=False,
+                    compiled=bool(getattr(scene,'compiled_kinematics',False)))
     effort=context.efforts*spec.enabled[None,:,None]
     return result['energy']-(effort*current.axis).sum(-1)
 
@@ -61,7 +63,8 @@ def system(scene,state,start,tx,tq,context):
     merged=merge(scene,state,result,joint_rows(scene,state,context))
     joint=merged['joint_rows'];ids=scene.joint_spec.owners
     residual=residual+state.x.new_zeros(residual.shape).index_add(1,ids.flatten(),joint['pair_residual'].flatten(1,2))*scene.dof
-    return residual,contact.ContactMetric(metric.local,merged['terms'],scene.dof),merged
+    return residual,contact.ContactMetric(metric.local,merged['terms'],scene.dof,
+        compiled_response_kernels=bool(getattr(scene,'compiled_response_kernels',False))),merged
 
 
 def merit(scene,state,start,tx,tq,context,frozen):
@@ -111,7 +114,9 @@ coarse=contact.coarse
 def acceptance_groups(scene,c,depth,travel,*,labels=False):
     possible=(depth[0]+travel[0,c.owners].sum(-1)>=0)&(c.material>0)
     owners,kinds,active=scene.all_relations(c.owners,possible)
-    graph=build_topology(scene.kind,scene.movable,scene.object_id,owners,kinds,potential_active=active)
+    fast=bool(getattr(scene,'fused_physical_checks',False))
+    graph=build_topology(scene.kind,scene.movable,scene.object_id,owners,kinds,potential_active=active,
+                         make_slots=not fast,fused_host=fast)
     if labels:return graph.interaction_id
     return [torch.where(graph.interaction_id==i)[0] for i in torch.unique(graph.interaction_id).tolist() if bool(scene.movable[graph.interaction_id==i].any())]
 

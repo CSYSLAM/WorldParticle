@@ -2,19 +2,32 @@
 import argparse
 import inspect
 import json
+import os
 from pathlib import Path
 import sys
 from types import SimpleNamespace
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'src'))
+os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--report',type=Path,required=True);a=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--report',type=Path,required=True)
+    parser.add_argument('--device',choices=('cpu','cuda:0'),default='cpu')
+    parser.add_argument('--compiled-response',action='store_true')
+    parser.add_argument('--spatial-products',action='store_true');a=parser.parse_args()
     from wp_vbd.newton_source import activate_newton_source,source_root
     activate_newton_source()
     if a.report.exists():raise FileExistsError(a.report)
+    from wp_vbd.gpu_ownership import claim_cuda
+    ownership=claim_cuda(a.device,ROOT)
+    from wp_vbd.compiled_contact import small_spatial_products
+    with small_spatial_products(a.spatial_products):verify(a)
+
+
+def verify(a):
+    from wp_vbd.newton_source import source_root
     import torch
     import warp as wp
     import newton
@@ -28,14 +41,17 @@ def main():
     from wp_vbd.data import State
     from wp_vbd.mimic_constraint import rows as mimic_rows
     torch.set_num_threads(1);torch.manual_seed(307)
-    wp.config.kernel_cache_dir=str(ROOT/'.local/p0/warp-cache');wp.init();wp.set_device('cpu')
+    torch.set_grad_enabled(False)
+    wp.config.kernel_cache_dir=str(ROOT/'.local/p0/warp-cache');wp.init();wp.set_device(a.device)
+    if a.device.startswith('cuda'):wp.set_stream(wp.stream_from_torch(torch.cuda.current_stream()))
     bound=inspect.signature(newton.solvers.SolverVBD).bind(None);bound.apply_defaults()
     configuration={k:v for k,v in bound.arguments.items() if k not in ('model','collision_pipeline')}
     def forbidden(*unused,**kwargs):raise AssertionError('No dynamics solver in tree-mode verification')
     for cls in (newton.solvers.SolverVBD,newton.solvers.SolverFeatherstone):cls.__init__=forbidden;cls.step=forbidden
-    e=build(wp,newton,device='cpu',start_time=1.95,material_mu=1e6,material_lambda=1e6,arm_drive_ke=20000.)
+    e=build(wp,newton,device=a.device,start_time=1.95,material_mu=1e6,material_lambda=1e6,arm_drive_ke=20000.)
     controller(e,3.3,wp)
-    scene=export_model(e.model,configuration,'research.franka_vbd_block',newton,e.sim_dt,'cpu')
+    scene=export_model(e.model,configuration,'research.franka_vbd_block',newton,e.sim_dt,a.device)
+    scene.compiled_response_kernels=a.compiled_response
     scene.metadata['detection_motion_budget']=.003
     solver=SurfaceJointExampleSolver(SimpleNamespace(config={}),scene,e.sim_dt,wp,newton,e.model,e.state_0)
     solver.refresh_control(e.control);start=solver.read(e.state_0)
@@ -84,7 +100,7 @@ def main():
     except ValueError:cyclic_rejected=True
     finally:scene.joint_spec.owners=owners
     assert cyclic_rejected
-    result={'status':'PASS','independent_tree_columns':modes.shape[-1],'maximum_component_columns':12,
+    result={'status':'PASS','device':a.device,'small_spatial_products':a.spatial_products,'compiled_response':a.compiled_response,'independent_tree_columns':modes.shape[-1],'maximum_component_columns':12,
             'structural_coordinate_directional_error':structural_error,'mimic_directional_error':mimic_error,
             'rigid_gauge_covariance_error':covariance,'coarse_response_symmetry_error':symmetry,
             'old_projected_residual_work':before,'new_projected_residual_work':after,

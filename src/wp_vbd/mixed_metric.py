@@ -56,6 +56,7 @@ def metric_topology(scene):
 
 class FrozenMixedMetric:
     def __init__(self, scene, state, start, target_x, target_q, dt, extras, relation_jacobian, *, base=None,elastic_mode='projected'):
+        self.compiled_response_kernels=bool(getattr(scene,'compiled_response_kernels',False))
         if elastic_mode not in ('projected','objective'):raise ValueError('Unknown coarse elastic metric')
         self.dof = scene.dof
         batch = state.x.shape[0]
@@ -115,10 +116,27 @@ class FrozenMixedMetric:
                 jf_stress,w_stress=positive_prestress_factor(f,dm,material,measure)
                 prestress.append(MetricTerm(ids,jf_stress,w_stress))
         selected = scene.bending_indices
-        ids = scene.bend_edges[selected]
+        if self.compiled_response_kernels and getattr(scene,'response_topology_cache',True) and not torch.is_grad_enabled():
+            from .response_topology import bending_ids
+            ids=bending_ids(scene)
+        else:ids = scene.bend_edges[selected]
         sl, retained = scene.structural_slices['bend_edges']
         # MixedScene retains exactly the positive, valid bend edges here.
-        bend = relation_jacobian[:, sl, :1, :, :]
+        if relation_jacobian is None:
+            # The physical metric consumes only bending rows from the full
+            # neural-relation Jacobian. Do not assemble discarded tetrahedral
+            # feature Jacobians, parameters, rates and neural condition rows.
+            if len(selected):
+                with torch.enable_grad():
+                    points=state.x[:,ids].detach().requires_grad_(True)
+                    n1=so3.normalize(torch.linalg.cross(points[:,:,2]-points[:,:,0],points[:,:,3]-points[:,:,0]))
+                    n2=so3.normalize(torch.linalg.cross(points[:,:,3]-points[:,:,1],points[:,:,2]-points[:,:,1]))
+                    edge=so3.normalize(points[:,:,3]-points[:,:,2])
+                    theta=torch.atan2((torch.linalg.cross(n1,n2)*edge).sum(-1),(n1*n2).sum(-1))
+                    derivative=torch.autograd.grad(theta.sum(),points)[0]
+                bend=torch.nn.functional.pad(derivative[:,:,None],(0,3))
+            else:bend=state.x.new_zeros(batch,0,1,4,6)
+        else:bend = relation_jacobian[:, sl, :1, :, :]
         weight = (scene.bend_material[selected, 0] * scene.bend_length[selected])[None, :, None].expand(batch, -1, -1)
         self.terms.append(MetricTerm(ids, bend.detach(), weight))
         self.terms.append(MetricTerm(scene.joints, extras[1].detach(), scene.joint_stiffness[None].expand(batch, -1, -1)))
@@ -128,27 +146,16 @@ class FrozenMixedMetric:
 
     @property
     def diagonal(self):
-        diagonal = self.local.clone()
-        for term in self.terms:
-            weighted = term.jacobian * term.weight[..., None, None]
-            contribution = torch.einsum('brcsi,brcsj->brsij', weighted, term.jacobian)
-            diagonal = diagonal.index_add(1, term.ids.flatten(), contribution.flatten(1, 2))
-        return diagonal * self.dof[None, :, :, None] * self.dof[None, :, None, :]
+        if getattr(self,'compiled_response_kernels',False) and not torch.is_grad_enabled() and self.local.is_cuda:
+            from .compiled_contact import evaluate as compiled
+            return compiled(_diagonal_tensor,self.local,self.terms,self.dof)
+        return _diagonal_tensor(self.local,self.terms,self.dof)
 
     def __call__(self, value):
-        mask = self.dof[None, :, :, None]
-        value = value * mask
-        result = self.local.to(value.dtype) @ value
-        for term in self.terms:
-            jacobian = term.jacobian.to(value.dtype)
-            restricted = torch.einsum('brcsi,brsiq->brcq', jacobian, value[:, term.ids])
-            # Explicitly contract W with Jv before the pullback. A three-input
-            # einsum can otherwise materialize R*C*S*6*Q for every component,
-            # retaining hundreds of MB per call in a large contact graph.
-            weighted = restricted * term.weight.to(value.dtype)[..., None]
-            reaction = torch.einsum('brcsi,brcq->brsiq', jacobian, weighted)
-            result = result.index_add(1, term.ids.flatten(), reaction.flatten(1, 2))
-        return result * mask
+        if getattr(self,'compiled_response_kernels',False) and not torch.is_grad_enabled() and value.is_cuda:
+            from .compiled_contact import evaluate as compiled
+            return compiled(_apply_tensor,self.local,self.terms,self.dof,value)
+        return _apply_tensor(self.local,self.terms,self.dof,value)
 
     def gram(self, plan, modes):
         """Z^T H Z from sparse overlaps; no global entity-to-pool matrix."""
@@ -160,3 +167,27 @@ class FrozenMixedMetric:
             restricted = torch.einsum('brcsi,brsip->brcp', term.jacobian[:, rows].to(modes.dtype), value)
             gram = gram + torch.einsum('brcp,brc,brcq->bpq', restricted, term.weight[:, rows].to(modes.dtype), restricted)
         return gram
+
+
+def _diagonal_tensor(local,terms,dof):
+    diagonal=local.clone()
+    for term in terms:
+        weighted=term.jacobian*term.weight[...,None,None]
+        contribution=torch.einsum('brcsi,brcsj->brsij',weighted,term.jacobian)
+        diagonal=diagonal.index_add(1,term.ids.flatten(),contribution.flatten(1,2))
+    return diagonal*dof[None,:,:,None]*dof[None,:,None,:]
+
+
+def _apply_tensor(local,terms,dof,value):
+    """Same ordered sparse J^T W J action; no dense global matrix."""
+    mask=dof[None,:,:,None]
+    value=value*mask
+    result=local.to(value.dtype)@value
+    for term in terms:
+        jacobian=term.jacobian.to(value.dtype)
+        restricted=torch.einsum('brcsi,brsiq->brcq',jacobian,value[:,term.ids])
+        # Contract W with Jv first to retain the bounded-memory path.
+        weighted=restricted*term.weight.to(value.dtype)[...,None]
+        reaction=torch.einsum('brcsi,brcq->brsiq',jacobian,weighted)
+        result=result.index_add(1,term.ids.flatten(),reaction.flatten(1,2))
+    return result*mask

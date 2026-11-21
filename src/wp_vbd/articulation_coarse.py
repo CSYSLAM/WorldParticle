@@ -91,12 +91,12 @@ def topology(scene):
     return result
 
 
-def raw_modes(scene, state):
-    plan = topology(scene); spec = scene.joint_spec
-    raw = state.x.new_zeros(len(state.x), scene.n, 6, len(plan.independent_joint_ids))
+def _raw_modes_tensor(scene,plan,x,q):
+    spec=scene.joint_spec
+    raw = x.new_zeros(len(x), scene.n, 6, len(plan.independent_joint_ids))
     for column, (joint, ids) in enumerate(zip(plan.source, plan.descendants)):
         parent, child = plan.parent_children[column]
-        parent_frame = so3.normalize(so3.multiply(state.q[:, parent], spec.frames[joint,0,3:]))
+        parent_frame = so3.normalize(so3.multiply(q[:, parent], spec.frames[joint,0,3:]))
         axis_local = spec.linear_axes[joint,0] if plan.linear_modes[column] else spec.angular_axes[joint,0]
         axis = so3.rotate(parent_frame, axis_local)
         if plan.linear_modes[column]:
@@ -105,21 +105,37 @@ def raw_modes(scene, state):
         else:
             # Use the current child anchor: a finite pre-existing anchor
             # error is not increased by the root joint's proposed rotation.
-            anchor = state.x[:,child]+so3.rotate(state.q[:,child], spec.frames[joint,1,:3]-scene.body_com[child])
+            anchor = x[:,child]+so3.rotate(q[:,child], spec.frames[joint,1,:3]-scene.body_com[child])
             angular=axis[:,None].expand(-1,len(ids),-1)
-            translation=torch.linalg.cross(angular, state.x[:,ids]-anchor[:,None])
+            translation=torch.linalg.cross(angular, x[:,ids]-anchor[:,None])
         value=torch.cat((translation,angular),-1)[...,None]*plan.mapping[column]
         raw=raw.index_add(1,ids,value)
+    return raw
+
+
+def raw_modes(scene, state):
+    plan=topology(scene)
+    compiled=bool(getattr(scene,'compiled_response_kernels',False)) and not torch.is_grad_enabled() and state.x.is_cuda
+    if compiled:
+        from .compiled_contact import evaluate
+        raw=evaluate(_raw_modes_tensor,scene,plan,state.x,state.q)
+    else:raw=_raw_modes_tensor(scene,plan,state.x,state.q)
     if getattr(scene, 'mimic_spec', None) is not None:
         from .mimic_constraint import Tangent
         tangent = Tangent(scene, state)
         if not bool(tangent.valid.all()):raise ValueError('Invalid mimic tangent in articulation modes')
         # Project all columns together, reusing the same small mass Gram.
-        for _, ids, jacobian, lift, inverse, _ in tangent.groups:
-            coordinate = torch.einsum('brni,bnip->brp', jacobian, raw[:,ids])
-            multiplier = torch.einsum('brs,bsp->brp', inverse, coordinate)
-            raw = raw.index_add(1, ids, -torch.einsum('brni,brp->bnip', lift, multiplier))
+        if compiled:raw=evaluate(_project_modes_tensor,raw,tangent.groups)
+        else:raw=_project_modes_tensor(raw,tangent.groups)
     return raw*scene.dof[None,:,:,None]
+
+
+def _project_modes_tensor(raw,groups):
+    for _,ids,jacobian,lift,inverse,_ in groups:
+        coordinate=torch.einsum('brni,bnip->brp',jacobian,raw[:,ids])
+        multiplier=torch.einsum('brs,bsp->brp',inverse,coordinate)
+        raw=raw.index_add(1,ids,-torch.einsum('brni,brp->bnip',lift,multiplier))
+    return raw
 
 
 def augment(scene, state, base, metric, residual, *, maximum_extra=None):

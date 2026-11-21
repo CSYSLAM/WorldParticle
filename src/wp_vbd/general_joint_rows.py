@@ -11,12 +11,12 @@ from . import math3d as so3
 from .joint_coordinates import anchor_coordinates,log_coordinates,d6_angular_coordinates,drive_limit_force,unwrap_near
 
 
-def coordinates(spec,position,rotation,com,*,previous_angle=None,jacobian=True):
+def coordinates(spec,position,rotation,com,*,previous_angle=None,jacobian=True,known_single_axis=False,return_tensors=False):
     linear,jlinear,anchors,parent=anchor_coordinates(position,rotation,com,spec.frames,jacobian=jacobian)
     child=so3.multiply(rotation[...,1,:],spec.frames[...,1,3:])
     angular,jangular=log_coordinates(parent,child,spec.rest_parent,spec.rest_child,jacobian=jacobian)
     valid=torch.ones_like(linear[...,0],dtype=torch.bool)
-    for count in (2,3):
+    for count in (() if known_single_axis else (2,3)):
         ids=torch.where(spec.angular_mode==count)[0]
         if len(ids):
             value,j,good=d6_angular_coordinates(spec.angular_axes[ids],count,parent[:,ids],child[:,ids],jacobian=jacobian)
@@ -38,10 +38,22 @@ def coordinates(spec,position,rotation,com,*,previous_angle=None,jacobian=True):
         angular_axis=torch.cat((torch.where(winding,angle,angular_axis[...,0])[...,None],angular_axis[...,1:]),-1)
     axis=torch.cat((linear_axis,angular_axis),-1)
     axis_j=torch.cat((torch.einsum('jcd,bjdsi->bjcsi',spec.linear_axes,jlinear),torch.einsum('jcd,bjdsi->bjcsi',spec.angular_axes,ja)),2) if jacobian else None
+    if return_tensors:return structural,structural_j,axis,axis_j,anchors,valid
     return SimpleNamespace(structural=structural,structural_jacobian=structural_j,axis=axis,axis_jacobian=axis_j,anchors=anchors,valid=valid)
 
 
-def evaluate(spec,current,start,dt,target,target_rate,*,frozen_bound=None,derivatives=True):
+def evaluate(spec,current,start,dt,target,target_rate,*,frozen_bound=None,derivatives=True,compiled=False):
+    if compiled and not torch.is_grad_enabled() and current.axis.is_cuda:
+        from .compiled_contact import evaluate as fused
+        result=fused(_evaluate_reference,spec,current,start,dt,target,target_rate,
+                     frozen_bound=frozen_bound,derivatives=derivatives,return_coordinates=False)
+        result['coordinates']=current
+        return result
+    return _evaluate_reference(spec,current,start,dt,target,target_rate,
+                               frozen_bound=frozen_bound,derivatives=derivatives)
+
+
+def _evaluate_reference(spec,current,start,dt,target,target_rate,*,frozen_bound=None,derivatives=True,return_coordinates=True):
     """Return residual forces, sparse GN rows and a matched frozen-row merit.
 
     `current` and `start` are coordinate snapshots, so line searches can keep
@@ -70,4 +82,6 @@ def evaluate(spec,current,start,dt,target,target_rate,*,frozen_bound=None,deriva
     limit_energy=.5*active_force.square()/(spec.limit_k+spec.limit_d/dt).clamp_min(1e-30)*response['has_limit']
     energy=(.5*spec.stiffness*current.structural.square()+.5*spec.damping/dt*(current.structural-start.structural).square()).sum(-1)
     energy=energy+(.5*spec.drive_k*(current.axis-clamped_target).square()+.5*spec.drive_d/dt*(current.axis-start.axis-dt*target_rate).square()+limit_energy).sum(-1)
-    return {'pair_residual':pair_residual,'jacobian':jacobian,'weight':weight,'energy':energy*spec.enabled,'bound_lower':response['bound_lower'],'valid':(current.valid&start.valid)|~spec.enabled,'coordinates':current}
+    result={'pair_residual':pair_residual,'jacobian':jacobian,'weight':weight,'energy':energy*spec.enabled,'bound_lower':response['bound_lower'],'valid':(current.valid&start.valid)|~spec.enabled}
+    if return_coordinates:result['coordinates']=current
+    return result

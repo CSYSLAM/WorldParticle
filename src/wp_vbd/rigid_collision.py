@@ -68,6 +68,12 @@ class RigidContacts:
             matching_mode=matching,match_index=match_index,match_generation=match_generation,stream_id=id(contacts))
 
     def geometry(self,scene,state):
+        from .inference_kinematics import memoize
+        return memoize('rigid_geometry',self,
+            (state.x,state.q,scene.body_com,self.owners,self.points,self.offsets,self.normal,self.margins),(),
+            lambda:self._geometry_uncached(scene,state))
+
+    def _geometry_uncached(self,scene,state):
         origin=state.x-so3.rotate(state.q,scene.body_com)
         x=origin[:,self.owners];q=state.q[:,self.owners]
         skeleton=x+so3.rotate(q,self.points)

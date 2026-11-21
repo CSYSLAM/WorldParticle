@@ -50,6 +50,14 @@ python scripts/run_robot_demo_suite.py --output outputs/my_robot_suite
 
 [六例说明和复现](docs/robot_demo_suite.md) · [抓布微调与消融](docs/robot_cloth_finetuning.md) · [Piper](docs/piper_soft_place.md) · [发布验证记录](model_releases/shared_vbd_v24_cloth40/validation_summary.json)
 
+最初两轮同权重执行优化保留了 `reference` 默认。策略 `--execution-policy fused_fast` 融合候选能量、运动及约束投影，并在物理调用内允许普通 GPU 并行聚合；它保留 FP64 物理精度与原来的检查，但不保证逐位复现。局部交错测试、完整回放及使用方法见 [第二轮推理优化](docs/inference_execution_v26.md)，第一轮结果见 [推理执行优化](docs/inference_execution_optimization.md)。完整任务与热运行短窗的计时范围不同，不能直接换算。
+
+第三轮候选 `fused_device` 继续融合稀疏响应、小矩阵及运动检查，并复用版本化拓扑索引。三个受控短窗对上一版耗时降低约 16%～24%；六例首次完整回放五例通过任务检查，抓布的外观检查在完整重复中有波动，因此尚未提升为默认。完整推理仍约 1 FPS，设计、边界与结果见 [第三轮推理优化](docs/inference_execution_v27.md)。
+
+可选 `fused_graph` 使用有界 CUDA Graph，原理与早期结果见 [有界 CUDA Graph 推理](docs/inference_execution_v29.md)。后续复核修正了旧 Franka 热运行脚本的控制器频率，因此旧 2.25 FPS 只适用于旧测试频率；正式完整录制不受影响。
+
+最新一轮在图路径合并物理检查与拓扑元数据传输，省去未使用的关系槽位，并接入单步纯运动学缓存。现已默认采用 `auto`：CUDA 的 Franka 软块、单角抓布和 W1 装袋自动选择 `fused_graph`；CPU 和其余三个场景保留 `reference`，显式策略参数优先。同条件七样本短窗对前一版图配置耗时降低约 2.1% / 4.2% / 3.2%（Franka / 抓布 / W1）；Franka 保持段约 2.27 FPS，包含预热的完整计时约 1.19 FPS，仍未实时。实现、测时边界与完整任务结果见 [同步与运动学优化](docs/inference_execution_v30.md) 和 [结果目录](outputs/inference_speed_v30/README.md)。
+
 ## 研究边界
 
 原生 VBD 仅用于离线教师和独立参考，模型推理不调用 VBD、Featherstone 或原生求解器回退。材料本构、接触、关节、解析预测、约束检查等物理计算仍然存在。当前不宣称纯单次前向替代整个求解器，也没有证明相对原生 VBD 的通用精度或速度优势。

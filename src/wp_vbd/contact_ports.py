@@ -66,20 +66,42 @@ class PointPorts:
         self.has_repeated_owners=bool(torch.tril(same,diagonal=-1).any())
 
     def _validate_state(self, state, body_com):
+        from .inference_kinematics import memoize
+        return memoize('port_state_validation',self,(state.x,state.q,body_com,self.body_mask),(),
+                       lambda:self._validate_state_uncached(state,body_com))
+
+    def _validate_state_uncached(self, state, body_com):
         batch = len(state.x)
         if state.x.shape != (batch, self.node_count, 3) or state.q.shape != (batch, self.node_count, 4):
             raise ValueError('Physical state shape does not match ports')
         if body_com.shape != (self.node_count, 3):
             raise ValueError('COM offsets must use physical owner indexing')
+        if getattr(self,'compiled_response_kernels',False) and not torch.is_grad_enabled() and state.x.is_cuda:
+            from .compiled_contact import evaluate as compiled
+            finite,orientation=compiled(_state_validity_tensor,state.x,state.q,body_com,self.body_mask).cpu().tolist()
+            if not finite:raise ValueError('Nonfinite physical port state')
+            if not orientation:raise ValueError('Degenerate body orientation')
+            return
         if not bool(torch.isfinite(state.x).all() & torch.isfinite(state.q).all() & torch.isfinite(body_com).all()):
             raise ValueError('Nonfinite physical port state')
         if bool((state.q[:, self.body_mask].norm(dim=-1) < 1e-12).any()):
             raise ValueError('Degenerate body orientation')
 
     def geometry(self, state, body_com, *, jacobian=True, point_chunk_rows=65536):
+        from .inference_kinematics import memoize
+        return memoize('port_geometry',self,
+            (state.x,state.q,body_com,self.ids,self.weights,self.local_points,self.rigid,self.body_mask),
+            (jacobian,point_chunk_rows),lambda:self._geometry_uncached(state,body_com,
+                jacobian=jacobian,point_chunk_rows=point_chunk_rows))
+
+    def _geometry_uncached(self, state, body_com, *, jacobian=True, point_chunk_rows=65536):
         if point_chunk_rows is not None and (type(point_chunk_rows) is not int or point_chunk_rows<=0):
             raise ValueError('Positive point chunk size or explicit unchunked reference required')
         self._validate_state(state, body_com)
+        return self._geometry_tensor(state,body_com,jacobian=jacobian,point_chunk_rows=point_chunk_rows)
+
+    def _geometry_tensor(self, state, body_com, *, jacobian=True, point_chunk_rows=65536):
+        """Pure arithmetic after the caller has validated this state/COM."""
         batch = len(state.x); rows, slots = self.owners.shape
         weights = self.weights.to(state.x)
         particle_only = not self.has_rigid and state.q.dtype==state.x.dtype==body_com.dtype
@@ -233,3 +255,9 @@ class PointPorts:
     def normal_compliance(self, jacobian, normal, inverse_blocks):
         row = torch.einsum('brc,brsci->brsi', normal, self.relative_jacobian(jacobian))
         return torch.einsum('brsi,brsij,brsj->br', row, inverse_blocks[:, self.ids], row)
+
+
+def _state_validity_tensor(x,q,body_com,body_mask):
+    finite=torch.isfinite(x).all()&torch.isfinite(q).all()&torch.isfinite(body_com).all()
+    orientation=~((q.norm(dim=-1)<1e-12)&body_mask[None]).any()
+    return torch.stack((finite,orientation))

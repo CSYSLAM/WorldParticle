@@ -18,12 +18,14 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'src'))
 from wp_vbd.newton_source import source_root, source_record
+from wp_vbd.inference_policy import CLI_POLICIES,resolve_policy
 NEWTON_ROOT = source_root()
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--execution-policy',choices=CLI_POLICIES,default='auto')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--checkpoint', type=Path, default=ROOT/'model_releases/shared_vbd_v24_cloth40/model.pt')
     p.add_argument('--device', choices=('cuda:0','cpu'), default='cuda:0')
@@ -87,8 +89,18 @@ def main():
     p.add_argument('--neural-precision',choices=('fp32','bf16'),default='fp32',help='Optional inference arithmetic inside the neural response only')
     p.add_argument('--compact-diagnostics',action='store_true',help='Omit per-component ray-scaling lists; preserve all numerical checks and acceptance rules')
     p.add_argument('--profile',action='store_true',help='Bounded CPU call statistics and neural/solver stream intervals; not a speed benchmark')
+    p.add_argument('--kinematic-cache',action=argparse.BooleanOptionalAction,default=None,
+                   help='Override policy: reuse exact pure kinematics within one forward, bound to tensor identity/version')
+    p.add_argument('--fast-assembly',action=argparse.BooleanOptionalAction,default=False,
+                   help='Skip neural-only feature work in analytic rounds and assemble physical metric rows directly')
+    p.add_argument('--compiled-contact-rows',action=argparse.BooleanOptionalAction,default=False,
+                   help='Fuse the unchanged FP64 contact tensor operator; lazy compilation has a cold-start cost')
+    p.add_argument('--compiled-kinematics',action=argparse.BooleanOptionalAction,default=False,
+                   help='Fuse unchanged one-axis joint and mimic kinematics on CUDA')
     p.add_argument('--exhaustive-line-search',action='store_true',help='Diagnostic reference: evaluate smaller rays even after all groups accept')
     a = p.parse_args()
+    a.execution_policy=resolve_policy(a.execution_policy,
+        scene='franka' if a.soft_asset=='block' else a.soft_asset,device=a.device,offline_reference=a.reference)
     if a.substeps is None:a.substeps=10 if a.reference else 3
     if a.soft_asset=='rigid_cloth' and (a.material_mu is not None or a.material_lambda is not None or a.grasp_yaw!=0.):
         p.error('Rigid/cloth scenes use authored cloth coefficients and a fixed tool orientation')
@@ -222,6 +234,8 @@ def main():
         if a.analytic_predictor_rounds is not None:runtime_config['analytic_predictor_rounds']=a.analytic_predictor_rounds
         if a.mimic_metric_tangent is not None:runtime_config['mimic_metric_tangent']=a.mimic_metric_tangent
         runtime_config['contact_aware_warm_start']=a.contact_aware_warm_start
+        from wp_vbd.inference_policy import configure
+        runtime_config=configure(runtime_config,a.execution_policy)
         network = MixedSolver(runtime_config).to(a.device).eval()
         missing,unexpected=network.load_state_dict(stored['model'],strict=False)
         allowed_missing=set()
@@ -309,6 +323,10 @@ def main():
         if a.soft_asset=='rigid_cloth':
             if not a.articulation_modes:p.error('Rigid/cloth scenes require --articulation-modes')
             scene.metadata['independent_object_motion_modes']=True
+        if a.kinematic_cache is not None:network.config['inference_kinematics_cache']=a.kinematic_cache
+        network.config['fast_inference_assembly']=network.config['fast_inference_assembly'] or a.fast_assembly
+        network.config['compiled_contact_rows']=network.config['compiled_contact_rows'] or a.compiled_contact_rows
+        network.config['compiled_kinematics']=network.config['compiled_kinematics'] or a.compiled_kinematics
         scene.metadata['soft_tangent_support_scale']=a.tangent_support_scale
         scene.metadata['rigid_tangent_support_scale']=a.rigid_tangent_support_scale
         scene.metadata['record_grasp_forces']=True
@@ -473,6 +491,10 @@ def main():
              'contact_force_peaks':force_peaks,
              'neural_graph_replay':attention_replay_report(network) if network else None,
              'neural_precision':precision.report() if precision else None,
+             'kinematic_cache':getattr(network,'last_kinematics_cache',None) if network else None,
+             'fast_inference_assembly':network.config['fast_inference_assembly'] if network else False,
+             'compiled_contact_rows':network.config['compiled_contact_rows'] if network else False,
+             'compiled_kinematics':network.config['compiled_kinematics'] if network else False,
              'compact_numerical_diagnostics':a.compact_diagnostics,
              'checkpoint':str(a.checkpoint) if network else None,'checkpoint_sha256':checkpoint_sha,'checkpoint_step':checkpoint_step,
              'model_architecture':network.architecture_id if network else None,
@@ -482,7 +504,7 @@ def main():
              'learning_enabled':not a.disable_learning,'requested_single_step_dt':a.request_dt,
              'recording_stride_substeps':1 if a.reference_record_substeps else e.sim_substeps,
              'source_static_sha256':static_sha,'native_substep_audit':native_audit if a.reference else None,
-             'solver_configuration':configuration,
+             'solver_configuration':configuration,'execution_policy':a.execution_policy,
              'initial_command_time':a.start_time,'independent_undeformed_soft_initialization':True,
              'teacher_release':None if a.release_after is None else {'start_time_s':a.release_after,'duration_s':a.release_duration,
                  'opening':'smoothstep from authored closed to open drive target'},
@@ -524,8 +546,10 @@ def main():
              'wall_seconds':time.perf_counter()-run_start+(resume['report']['wall_seconds'] if resume else 0.),'gpu_budget':budget.report(),
              'scope':'New dynamic grasp test; original URDF/inertia/collision geometry, native per-configuration mesh force filtering, low-resolution elastic block or original duck. IK produces drive targets only. No trained-demo or realtime claim.'}
         if network and solver.last_diagnostic:
-            out['last_diagnostic']={k:(v.detach().cpu().tolist() if isinstance(v,torch.Tensor) else v) for k,v in solver.last_diagnostic.items() if k not in ('iterations','rejected_physical_step','contact_repair_supervision')}
+            out['last_diagnostic']={k:v for k,v in solver.last_diagnostic.items() if k not in ('iterations','rejected_physical_step','contact_repair_supervision')}
             out['articulation_coarse']=getattr(scene,'articulation_coarse_diagnostic',None)
+            cache=getattr(scene,'_response_index_workspace',None)
+            if cache is not None:out['response_index_cache']=cache.report()
         if particle:
             out['soft_center_lift_m']=float((particle[-1]-initial_particle).mean(0)[2])
             out['body_origin_max_motion_m']=float(np.linalg.norm(body[-1][:,:3]-initial_body[:,:3],axis=-1).max())
@@ -563,7 +587,8 @@ def main():
             out.update(actual_tool_position=point.tolist(),commanded_tool_position=target.tolist(),
                        tool_position_error_m=float(np.linalg.norm(point-target)))
         temporary=report_path.with_suffix('.tmp')
-        temporary.write_text(json.dumps(out,indent=2,default=str)+'\n')
+        from wp_vbd.diagnostic_io import to_plain
+        temporary.write_text(json.dumps(to_plain(out),indent=2,default=str)+'\n')
         temporary.replace(report_path)
     write('RUNNING')
     profiler=None

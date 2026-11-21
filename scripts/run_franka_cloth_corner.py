@@ -11,12 +11,14 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
+from wp_vbd.inference_policy import CLI_POLICIES,resolve_policy
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--checkpoint', type=Path, default=ROOT / 'model_releases/shared_vbd_v24_cloth40/model.pt')
+    p.add_argument('--execution-policy',choices=CLI_POLICIES,default='auto')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--device', choices=('cpu', 'cuda:0'), default='cuda:0')
     p.add_argument('--frames', type=int, help='Defaults to the full control timeline')
@@ -32,6 +34,7 @@ def main():
     p.add_argument('--terminal-velocity', action=argparse.BooleanOptionalAction, default=True,
                    help='Use the frozen endpoint-velocity readout; disable for matched diagnosis')
     a = p.parse_args()
+    a.execution_policy=resolve_policy(a.execution_policy,scene='cloth',device='cpu' if a.geometry_only else a.device)
     if (a.frames is not None and a.frames < 1) or a.substeps < 1:
         p.error('Positive frames and substeps required')
     a.output = a.output.expanduser().resolve()
@@ -103,7 +106,7 @@ def main():
             return value.item()
         return str(value)
     def report(status, failure=None):
-        result = dict(status=status, scene='research.franka_cloth_corner',
+        result = dict(execution_policy=a.execution_policy,status=status, scene='research.franka_cloth_corner',
             mode='asset_geometry_preview' if a.geometry_only else ('physical_only_diagnostic' if a.disable_learning else 'shared_network_inference'),
             learning_enabled=bool(not a.disable_learning and not a.geometry_only),
             robot_asset='franka_emika_panda/fr3_franka_hand.urdf',
@@ -139,7 +142,10 @@ def main():
             scope='Dynamic FR3, free square cloth, frictional single-corner pinch. No pins, attachments, native dynamics, teacher trajectory or cloth pose override. Self-contact is not enabled in this simple drape.',
             failure=failure)
         tmp = a.output / 'run.tmp'
-        tmp.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=plain)+'\n')
+        cache=getattr(scene,'_response_index_workspace',None)
+        if cache is not None:result['response_index_cache']=cache.report()
+        from wp_vbd.diagnostic_io import to_plain
+        tmp.write_text(json.dumps(to_plain(result), ensure_ascii=False, indent=2, default=plain)+'\n')
         tmp.replace(a.output / 'run.json')
     record(0.)
     if a.geometry_only:
@@ -165,6 +171,8 @@ def main():
     stored=torch.load(a.checkpoint, map_location='cpu', weights_only=True)
     config=dict(stored.get('model_config') or stored['config']['model'])
     config.update(mimic_metric_tangent=True, contact_aware_warm_start=True, periodic_bending=True)
+    from wp_vbd.inference_policy import configure
+    config=configure(config,a.execution_policy)
     network=MixedSolver(config).to(device).eval()
     network.load_state_dict(stored['model'], strict=True)
     if not a.terminal_velocity or a.disable_learning:network.terminal_velocity=None

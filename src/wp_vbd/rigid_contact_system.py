@@ -10,7 +10,9 @@ from .coarse_response import rigid_component_modes
 
 
 class ContactMetric(FrozenMixedMetric):
-    def __init__(self,local,terms,dof):self.local=local.detach();self.terms=terms;self.dof=dof
+    def __init__(self,local,terms,dof,*,compiled_response_kernels=False):
+        self.local=local.detach();self.terms=terms;self.dof=dof
+        self.compiled_response_kernels=compiled_response_kernels
 
 
 def begin(scene,start,contacts,dt):
@@ -38,7 +40,8 @@ def _row_values(scene,c,x,q,previous_x,previous_q,depth0,c0_t,rho_n,rho_t,dual_t
     # k_eff*C+s*lambda gives exactly K*C for every positive numerical rho.
     # Tangential Coulomb duals remain explicit and are not eliminated.
     dual=dual_t+normal_load[...,None]*c.normal
-    ctx=ContactContext(c.material[None],rho_n,rho_t,c.damping[None],c.mu[None],dual,(1-alpha)*c0_t,c.mu.new_full((1,len(c.mu)),scene.metadata['friction_epsilon']),dt)
+    ctx=ContactContext(c.material[None],rho_n,rho_t,c.damping[None],c.mu[None],dual,(1-alpha)*c0_t,c.mu.new_full((1,len(c.mu)),scene.metadata['friction_epsilon']),dt,
+                       compiled_rows=bool(getattr(scene,'compiled_contact_rows',False)))
     result=evaluate(origin,q,previous_origin,previous_q,scene.body_com[c.owners],c.points,c.offsets,c.normal,effective,c.surface_velocity,ctx)
     active=(normal_load>0)&(c.material[None]>0)&scene.movable[c.owners].any(-1)[None]
     approach=((skeleton[:,:,1]-old_skeleton[:,:,1]-skeleton[:,:,0]+old_skeleton[:,:,0])*c.normal).sum(-1)/dt
@@ -85,7 +88,8 @@ def system(scene,state,start,tx,tq,context):
     local=state.x.new_zeros(len(state.x),scene.n,6,6)
     local[...,:3,:3]=scene.mass[None,:,None,None]/dt**2*eye;local[...,3:,3:]=angular
     contact=rows(scene,state,start,context)
-    metric=ContactMetric(local,contact['terms'],scene.dof)
+    metric=ContactMetric(local,contact['terms'],scene.dof,
+                         compiled_response_kernels=bool(getattr(scene,'compiled_response_kernels',False)))
     return (residual+contact['residual'])*scene.dof,metric,contact
 
 
@@ -96,8 +100,12 @@ def coarse(scene,state):
         from .component_batch import layout
         groups=layout(scene);center=groups.centers(state.x)
         packed_modes=rigid_component_modes(state.x,center[:,groups.labels],scene.dof).double()
-    for ids in scene.interaction_entities:
-        ids=ids[scene.movable[ids]]
+    if (getattr(scene,'compiled_response_kernels',False) and getattr(scene,'response_topology_cache',True)
+            and not torch.is_grad_enabled()):
+        from .response_topology import mobile_components
+        members=mobile_components(scene)
+    else:members=[ids[scene.movable[ids]] for ids in scene.interaction_entities]
+    for ids in members:
         if not len(ids):continue
         if batched:modes=packed_modes[:,ids]
         else:
@@ -124,12 +132,17 @@ def relation_features(scene,state,start,context,contact,feedback):
 
 
 def merit(scene,state,start,tx,tq,context,frozen,*,include_inertia=True):
+    return _merit(scene,state,start,tx,tq,context,frozen,include_inertia=include_inertia)
+
+
+def _merit(scene,state,start,tx,tq,context,frozen,*,include_inertia=True,tensor_geometry=False):
     dt=context.dt;c=context.contacts
     angle=so3.log(so3.multiply(so3.conjugate(state.q),tq))
     energy=.5*scene.mass[None]/dt**2*(state.x-tx).square().sum(-1)+.5*(angle*(scene.inertia@angle[...,None])[...,0]).sum(-1)/dt**2
     if not include_inertia:energy=torch.zeros_like(energy)
     if not len(c.owners) and not torch.is_grad_enabled():return energy
-    _,_,skeleton,surface,raw=c.geometry(scene,state);_,_,old_skeleton,old_surface,_=c.geometry(scene,getattr(context,'material_start',start))
+    geometry=c._geometry_uncached if tensor_geometry else c.geometry
+    _,_,skeleton,surface,raw=geometry(scene,state);_,_,old_skeleton,old_surface,_=geometry(scene,getattr(context,'material_start',start))
     alpha=scene.metadata['contact_alpha'];effective=torch.where(raw<0,raw,raw-alpha*context.depth0)
     pair=.5*c.material[None]*effective.clamp_min(0).square()
     normal_displacement=((skeleton[:,:,1]-old_skeleton[:,:,1]-skeleton[:,:,0]+old_skeleton[:,:,0])*c.normal).sum(-1)

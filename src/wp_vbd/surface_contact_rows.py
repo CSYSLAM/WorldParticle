@@ -102,7 +102,8 @@ def rows(snapshot, state, body_com, context):
     epsilon = depth.new_full(depth.shape, context.friction_epsilon)
     constitutive = ContactContext(stiffness, context.rho_n*eligible, context.rho_t*eligible,
                                   damping_material, material.friction[None], dual,
-                                  context.c0_t, epsilon, context.dt)
+                                  context.c0_t, epsilon, context.dt,
+                                  compiled_rows=bool(getattr(context,'compiled_rows',False)))
     result = evaluate(point, local, context.start_point, local, zero, zero, zero,
                       normal, depth, context.surface_velocity, constitutive)
     residual = -snapshot.ports.pullback(jacobian, result['force'])
@@ -123,7 +124,20 @@ def rows(snapshot, state, body_com, context):
 
 def merit(snapshot, state, body_com, context, frozen):
     point, _, depth = snapshot.geometry(state, body_com,jacobian=False)
-    dt = context.dt; normal = snapshot.normal
+    return _merit_from_geometry(point,depth,snapshot.normal,context,frozen)
+
+
+def _merit_tensor(snapshot, state, body_com, context, frozen):
+    # The enclosing candidate evaluation validates these exact state/COM
+    # tensors before invoking the compiler; do not replace those checks.
+    point,_=snapshot.ports._geometry_tensor(state,body_com,jacobian=False)
+    distance=((point[:,:,1]-point[:,:,0])*snapshot.normal).sum(-1)
+    depth=snapshot.radius+snapshot.shape_margin-distance
+    return _merit_from_geometry(point,depth,snapshot.normal,context,frozen)
+
+
+def _merit_from_geometry(point, depth, normal, context, frozen):
+    dt = context.dt
     displacement = point[:, :, 1]-context.start_point[:, :, 1]-point[:, :, 0]+context.start_point[:, :, 0]
     normal_displacement = (displacement*normal).sum(-1)
     energy = .5*context.material.stiffness[None]*depth.clamp_min(0).square()

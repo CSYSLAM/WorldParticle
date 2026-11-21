@@ -15,6 +15,7 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--execution-policy',choices=('reference','assembly','fused','fused_search','fused_fast','fused_device','fused_graph'),default='reference')
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--checkpoint',type=Path,default=ROOT/'model_releases/shared_vbd_v24_cloth40/model.pt')
     p.add_argument('--device',choices=('cuda:0','cpu'),default='cuda:0')
@@ -33,6 +34,7 @@ def main():
              '--force-aware-anticipation','--compact-diagnostics','--motion-budget','.012',
              '--rigid-tangent-support-scale',str(a.rigid_tangent_support_scale),
              '--material-motion-modes','--surface-tangent-history','--contact-aware-warm-start']
+    command += ['--execution-policy',a.execution_policy]
     if a.window:command.append('--window')
     if a.print_command:print(json.dumps(command,ensure_ascii=False,indent=2));return
     subprocess.run(command,check=True)

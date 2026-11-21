@@ -116,7 +116,13 @@ class MixedContactScene(MixedScene):
         graph = build_topology(self.kind, self.movable, self.object_id, incidence, kinds, potential_active=enabled, generation=self.topology_generation)
         self.layout = graph.layout
         self.layout.legacy_kind = torch.where(kinds >= 7, 6, kinds)
-        self.interaction_id = graph.interaction_id
-        self.interaction_entities = [torch.where(self.interaction_id == label)[0] for label in torch.unique(self.interaction_id).tolist()]
+        # Activity/layout changes need a fresh generation, but not fresh
+        # member tensors when the actual partition is exactly unchanged.
+        # Keeping these immutable indices permits versioned map reuse.
+        same_partition=(getattr(self,'response_topology_cache',False)
+                        and torch.equal(self.interaction_id,graph.interaction_id))
+        if not same_partition:
+            self.interaction_id = graph.interaction_id
+            self.interaction_entities = [torch.where(self.interaction_id == label)[0] for label in torch.unique(self.interaction_id).tolist()]
         for key in ('_protected_topology', '_hierarchy_plans', '_transport_plans', '_vector_active_components', '_hierarchy_material_masks'):
             if hasattr(self, key): delattr(self, key)

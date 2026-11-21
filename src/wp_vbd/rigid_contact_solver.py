@@ -9,8 +9,18 @@ from .unified_graph import build_topology
 
 
 def move(scene,state,update,alpha):
-    delta=update*alpha[...,None]*scene.dof
-    return State(state.x+delta[...,:3],so3.normalize(so3.multiply(so3.exp(delta[...,3:]),state.q)),state.v,state.omega)
+    function=_move_tensor
+    if (getattr(scene,'compiled_candidate_kernels',False)
+            and not torch.is_grad_enabled() and state.x.is_cuda):
+        from .compiled_contact import evaluate as compiled
+        function=lambda *args:compiled(_move_tensor,*args)
+    x,q=function(state.x,state.q,update,alpha,scene.dof)
+    return State(x,q,state.v,state.omega)
+
+
+def _move_tensor(x,q,update,alpha,dof):
+    delta=update*alpha[...,None]*dof
+    return x+delta[...,:3],so3.normalize(so3.multiply(so3.exp(delta[...,3:]),q))
 
 
 def acceptance_groups(scene,c,depth,travel,*,labels=False):
@@ -200,7 +210,8 @@ def step(model,scene,start,dt,learned,force,torque,*,physics=None):
         scene.update_graph(context.contacts.owners,contact.get('topology_active',contact['active'])[0])
         physical=-(w@baseline@w@residual[...,None])[...,0];last_physical=physical
         if tangent is not None:physical=tangent.primal(physical);last_physical=physical
-        relation=encode_relations(scene,current,start,context,contact,feedback)
+        relation=(encode_relations(scene,current,start,context,contact,feedback)
+            if iteration_learned or not getattr(scene,'fast_inference_assembly',False) else None)
         from .residual_backward import freeze as freeze_residual
         response_residual=residual.detach() if freeze_residual(model.config,scene.metadata.get('contract')) and torch.is_grad_enabled() else residual
         raw_coarse=make_coarse(scene,current)

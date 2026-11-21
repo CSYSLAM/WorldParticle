@@ -18,6 +18,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--asset', type=Path, default=Path.home() / '下载/assets/scene/松灵 Piper 机械臂-urdf/piper/piper.urdf')
     p.add_argument('--checkpoint', type=Path, default=ROOT / 'model_releases/shared_vbd_v24_cloth40/model.pt')
+    p.add_argument('--execution-policy',choices=('reference','assembly','fused','fused_search','fused_fast','fused_device','fused_graph'),default='reference')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--device', choices=('cpu', 'cuda:0'), default='cuda:0')
     p.add_argument('--frames', type=int, default=312)
@@ -100,7 +101,7 @@ def main():
             return value.item()
         return str(value)
     def report(status, failure=None):
-        result = dict(status=status, scene='research.piper_soft_place',
+        result = dict(execution_policy=a.execution_policy,status=status, scene='research.piper_soft_place',
             mode='asset_geometry_preview' if a.geometry_only else 'shared_network_inference',
             asset=str(a.asset), asset_sha256=hashlib.sha256(a.asset.read_bytes()).hexdigest(),
             newton_source=source_record(), device=device,
@@ -132,7 +133,10 @@ def main():
             scope='Imported Piper robot and negative finger mimic, dynamic soft block and free rigid support cube. No object pins, native dynamics, teacher trajectory or payload pose override.',
             failure=failure)
         tmp = a.output / 'run.tmp'
-        tmp.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=plain)+'\n')
+        cache=getattr(scene,'_response_index_workspace',None)
+        if cache is not None:result['response_index_cache']=cache.report()
+        from wp_vbd.diagnostic_io import to_plain
+        tmp.write_text(json.dumps(to_plain(result), ensure_ascii=False, indent=2, default=plain)+'\n')
         tmp.replace(a.output / 'run.json')
     record(0.)
     if a.geometry_only:
@@ -158,6 +162,8 @@ def main():
     stored=torch.load(a.checkpoint, map_location='cpu', weights_only=True)
     config=dict(stored.get('model_config') or stored['config']['model'])
     config.update(mimic_metric_tangent=True, contact_aware_warm_start=True)
+    from wp_vbd.inference_policy import configure
+    config=configure(config,a.execution_policy)
     network=MixedSolver(config).to(device).eval()
     network.load_state_dict(stored['model'], strict=True)
     scene=export_model(e.model, configuration, 'research.piper_soft_place', newton, e.sim_dt, device)

@@ -80,6 +80,14 @@ def acceptance_groups(scene, candidates, depth, travel, *, labels=False, metric_
 
 
 def path_feasible(scene, start, end):
+    if (getattr(scene,'compiled_candidate_kernels',False)
+            and not torch.is_grad_enabled() and start.x.is_cuda):
+        from .compiled_contact import evaluate as compiled
+        return compiled(_path_feasible_reference,scene,start,end)
+    return _path_feasible_reference(scene,start,end)
+
+
+def _path_feasible_reference(scene, start, end):
     """Guard the entire linear particle path, including an interior collapse.
 
     Tet determinant is cubic. For a triangle the cross product is quadratic;

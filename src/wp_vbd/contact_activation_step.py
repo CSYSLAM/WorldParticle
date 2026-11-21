@@ -18,7 +18,8 @@ def _rigid_rows(scene,state,update,contacts,context,frozen):
     arm=frozen['skeleton']-state.x[:,contacts.owners]
     remainder=.5*(arm.norm(dim=-1)*update[:,contacts.owners,3:].square().sum(-1)).sum(-1)
     shift=scene.metadata['contact_alpha']*context.depth0
-    value=normal_activation_curvature(frozen['raw_depth'],linear,remainder,shift,contacts.material[None])
+    value=normal_activation_curvature(frozen['raw_depth'],linear,remainder,shift,contacts.material[None],
+        compiled=bool(getattr(scene,'fused_physical_checks',False)))
     return contacts.owners,contacts.owners>=0,value
 
 
@@ -41,7 +42,8 @@ def _soft_rows(scene,state,update,snapshot,context,frozen):
     if not len(ports.owners):return ports.owners,participating,update.new_zeros(len(update),0)
     linear,remainder=_port_motion(scene,state,update,ports,frozen['jacobian'],snapshot.normal)
     value=normal_activation_curvature(frozen['raw_depth'],linear,remainder,
-        torch.zeros_like(linear),context.material.stiffness[None])
+        torch.zeros_like(linear),context.material.stiffness[None],
+        compiled=bool(getattr(scene,'fused_physical_checks',False)))
     return ports.owners,participating,value
 
 
@@ -112,9 +114,13 @@ def scale_proposal(scene,state,context,frozen,metric,residual,update,labels):
             ratio=(numerator/denominator.clamp_min(torch.finfo(update.dtype).tiny)).clamp(0.,1.)
             scales=torch.where(affected,torch.where(good,ratio,0.),scales)
             valid&=(good|~affected).all(-1)
-            for label in torch.where(affected.any(0))[0].tolist():
-                details.append({'component':label,'mobile_entities':int(((labels==label)&scene.movable).sum()),
-                    'linear_descent':numerator[:,label].cpu().tolist(),'metric_curvature':old_curvature[:,label].cpu().tolist(),
-                    'new_contact_curvature':extra[:,label].cpu().tolist(),'scale':scales[:,label].cpu().tolist()})
+            if (getattr(scene,'fused_physical_checks',False)
+                    and scene.metadata.get('compact_numerical_diagnostics',False)):
+                details.append({'values_omitted':True})
+            else:
+                for label in torch.where(affected.any(0))[0].tolist():
+                    details.append({'component':label,'mobile_entities':int(((labels==label)&scene.movable).sum()),
+                        'linear_descent':numerator[:,label].cpu().tolist(),'metric_curvature':old_curvature[:,label].cpu().tolist(),
+                        'new_contact_curvature':extra[:,label].cpu().tolist(),'scale':scales[:,label].cpu().tolist()})
         selected=scales[:,labels,None]
     return torch.where(valid[:,None,None],update*scene.dof*selected,0.),valid,details

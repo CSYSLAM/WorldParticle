@@ -59,9 +59,19 @@ class ContactContext:
     friction_epsilon:torch.Tensor
     dt:float
     mode:str='compliant'
+    compiled_rows:bool=False
 
 
 def evaluate(position,rotation,previous_position,previous_rotation,body_com,point_local,offset_local,normal,depth,surface_velocity,context):
+    if getattr(context,'compiled_rows',False) and not torch.is_grad_enabled() and position.is_cuda and depth.numel():
+        from .compiled_contact import evaluate as compiled
+        return compiled(_evaluate_reference,position,rotation,previous_position,previous_rotation,body_com,
+                        point_local,offset_local,normal,depth,surface_velocity,context)
+    return _evaluate_reference(position,rotation,previous_position,previous_rotation,body_com,
+                               point_local,offset_local,normal,depth,surface_velocity,context)
+
+
+def _evaluate_reference(position,rotation,previous_position,previous_rotation,body_com,point_local,offset_local,normal,depth,surface_velocity,context):
     """Return physical pair wrenches and 6x6 COM solve blocks.
 
     Leading dimensions are independent contacts; the penultimate body axis

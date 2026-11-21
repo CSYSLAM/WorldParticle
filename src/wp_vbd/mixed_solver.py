@@ -227,7 +227,18 @@ class MixedSolver(nn.Module):
             self.objective=torch.compile(incremental_objective,fullgraph=True,dynamic=False,options={'triton.cudagraphs':False})
 
     def forward(self,scene,start,dt,*,learned=True,force=None,torque=None):
+        from .inference_policy import inference_settings
+        with inference_settings(self.config):
+            return self._forward_with_execution_settings(scene,start,dt,learned=learned,force=force,torque=torque)
+
+    def _forward_with_execution_settings(self,scene,start,dt,*,learned=True,force=None,torque=None):
         self._elastic_shape_supervision_terms=[]
+        if self.config.get('inference_kinematics_cache',False) and not torch.is_grad_enabled():
+            from .inference_kinematics import StepKinematics
+            with StepKinematics() as cache:
+                result=self._step_with_velocity(scene,start,dt,learned,force,torque)
+            self.last_kinematics_cache=cache.report()
+            return result
         if (getattr(self,'step_saved_tensors_on_cpu',False) and self.training
                 and torch.is_grad_enabled() and start.x.is_cuda):
             # Offload autograd's saved copies, preserving the actual state,
@@ -250,6 +261,8 @@ class MixedSolver(nn.Module):
         return result, diagnostic
 
     def _forward_step(self,scene,start,dt,*,learned=True,force=None,torque=None):
+        from .inference_policy import apply_scene
+        apply_scene(scene,self.config)
         from .self_contact_repair import configure
         configure(scene,self.config)
         compact=bool(self.config.get('compact_frozen_contact_metric',False))

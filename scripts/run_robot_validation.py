@@ -12,6 +12,8 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.inference_policy import CLI_POLICIES,resolve_policy
 
 
 def main():
@@ -19,6 +21,8 @@ def main():
     parser.add_argument('--scene', choices=('franka', 'w1', 'cloth','piper','w1_dual','franka_rigid_cloth'), required=True)
     parser.add_argument('--recipe',type=Path,default=ROOT/'configs/robot_validation_cloth_ft.json')
     parser.add_argument('--device', choices=('cuda:0', 'cpu'), default='cuda:0')
+    parser.add_argument('--execution-policy',choices=CLI_POLICIES,default='auto',
+                        help='Auto enables fused_graph for validated CUDA Franka/cloth/W1 scenes')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--asset', type=Path, help='W1 URDF or asset directory')
     parser.add_argument('--frames', type=int, help='Shorten or extend the recording; omit for the full validated task')
@@ -26,6 +30,7 @@ def main():
     parser.add_argument('--window',action='store_true',help='Display the live inference window')
     parser.add_argument('--dry-run', action='store_true', help='Print commands without loading the model or running physics')
     args = parser.parse_args()
+    args.execution_policy=resolve_policy(args.execution_policy,scene=args.scene,device=args.device)
     if args.asset and args.scene not in ('w1','w1_dual','piper'):
         parser.error('--asset applies to W1 and Piper scenes only')
     if args.frames is not None and args.frames < 1:
@@ -44,6 +49,7 @@ def main():
         command[command.index('--frames') + 1] = str(args.frames)
     if args.asset:
         command += ['--asset', str(args.asset.expanduser().resolve())]
+    command += ['--execution-policy',args.execution_policy]
     if args.window:command.append('--window')
     render_command = [sys.executable, scene['renderer'], '--recording', str(output),
                       '--output', str(output / 'model.mp4')]

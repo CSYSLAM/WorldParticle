@@ -40,6 +40,10 @@ class ComponentTopology:
 def topology(scene, metric, blocks):
     """Freeze index maps during eager warmup; never copy CUDA data in capture."""
     terms = metric_terms(scene, metric)
+    if (getattr(scene,'compiled_response_kernels',False) and getattr(scene,'response_topology_cache',True)
+            and not torch.is_grad_enabled()):
+        from .response_topology import build
+        return build(scene,terms,blocks)
     signature = (tuple((tuple(p.ids.shape), z.shape[-1]) for p, z, *_ in blocks),
                  tuple(tuple(t.ids.shape) for t in terms),
                  tuple(getattr(t,'topology_key',None) for t in terms))
@@ -91,6 +95,7 @@ class ProtectedCoarse:
     """
     def __init__(self, scene, metric, blocks, *, maximum_columns=12, rank_relative=1e-12, exact_rigid_singletons=False):
         self.scene, self.metric = scene, metric
+        self.compiled=bool(getattr(scene,'compiled_response_kernels',False)) and not torch.is_grad_enabled() and metric.local.is_cuda
         self.topology = topology(scene, metric, blocks)
         self.groups = []
         self.ranks = []
@@ -142,42 +147,55 @@ class ProtectedCoarse:
                     embedding.append((image * weight.clamp_min(0).sqrt()[..., None]).flatten(1, 2))
                 energy = torch.cat(embedding, 1)
                 self.valid &= torch.isfinite(z).flatten(1).all(-1) & torch.isfinite(energy).flatten(1).all(-1)
-                basis, images, retained = [], [], []
-                for column in range(z.shape[-1]):
-                    value, image = z[..., column], energy[..., column]
-                    original = image.square().sum(-1)
-                    if basis:
-                        q, e = torch.stack(basis, -1), torch.stack(images, -1)
-                        for _ in range(2):
-                            coefficient = torch.einsum('bdp,bd->bp', e, image)
-                            value = value - torch.einsum('bnip,bp->bni', q, coefficient)
-                            image = image - torch.einsum('bdp,bp->bd', e, coefficient)
-                    norm = image.square().sum(-1)
-                    keep = (norm > rank_relative * original) & (original > 0) & torch.isfinite(norm)
-                    scale = torch.where(keep, norm.clamp_min(1e-300).rsqrt(), 0.)
-                    basis.append(value * scale[:, None, None])
-                    images.append(image * scale[:, None])
-                    retained.append(keep)
-                self.groups.append((group.ids, torch.stack(basis, -1)))
-                self.ranks.append(torch.stack(retained, -1).sum(-1))
+                if self.compiled:
+                    from .compiled_contact import evaluate as compiled
+                    basis,rank=compiled(_orthogonalize_tensor,z,energy,rank_relative)
+                else:basis,rank=_orthogonalize_tensor(z,energy,rank_relative)
+                self.groups.append((group.ids,basis));self.ranks.append(rank)
             if singleton_ids:
                 self.singleton_ids=torch.cat(singleton_ids);self.singleton_q=singleton_q[:,self.singleton_ids]
             self.all_mobile_singletons=exact_rigid_singletons and all(exact or not group.blocks for exact,group in zip(self.singleton_group_mask,self.topology))
 
     def __call__(self, value):
-        vector = value.ndim == 3
-        source = value.double()[..., None] if vector else value.double()
-        result = torch.zeros_like(source)
-        if self.singleton_ids is not None:
-            q=self.singleton_q
-            value=q@(q.transpose(-1,-2)@source[:,self.singleton_ids])
-            result=result.index_copy(1,self.singleton_ids,value)
-        for index,(ids, q) in enumerate(self.groups):
-            if self.singleton_group_mask[index]:continue
-            if not q.shape[-1]:continue
-            coefficient = torch.einsum('bnip,bniq->bpq', q, source[:, ids])
-            result = result.index_add(1, ids, torch.einsum('bnip,bpq->bniq', q, coefficient))
-        return (result[..., 0] if vector else result).to(value.dtype)
+        args=(value,self.groups,self.singleton_ids,getattr(self,'singleton_q',None),self.singleton_group_mask)
+        if self.compiled and not torch.is_grad_enabled():
+            from .compiled_contact import evaluate as compiled
+            return compiled(_apply_coarse_tensor,*args)
+        return _apply_coarse_tensor(*args)
+
+
+def _orthogonalize_tensor(z,energy,rank_relative):
+    """The original ordered two-pass modified Gram--Schmidt, including masks."""
+    basis,images,retained=[],[],[]
+    for column in range(z.shape[-1]):
+        value,image=z[...,column],energy[...,column]
+        original=image.square().sum(-1)
+        if basis:
+            q,e=torch.stack(basis,-1),torch.stack(images,-1)
+            for _ in range(2):
+                coefficient=torch.einsum('bdp,bd->bp',e,image)
+                value=value-torch.einsum('bnip,bp->bni',q,coefficient)
+                image=image-torch.einsum('bdp,bp->bd',e,coefficient)
+        norm=image.square().sum(-1)
+        keep=(norm>rank_relative*original)&(original>0)&torch.isfinite(norm)
+        scale=torch.where(keep,norm.clamp_min(1e-300).rsqrt(),0.)
+        basis.append(value*scale[:,None,None]);images.append(image*scale[:,None]);retained.append(keep)
+    return torch.stack(basis,-1),torch.stack(retained,-1).sum(-1)
+
+
+def _apply_coarse_tensor(value,groups,singleton_ids,singleton_q,singleton_group_mask):
+    vector=value.ndim==3
+    source=value.double()[...,None] if vector else value.double()
+    result=torch.zeros_like(source)
+    if singleton_ids is not None:
+        q=singleton_q
+        value=q@(q.transpose(-1,-2)@source[:,singleton_ids])
+        result=result.index_copy(1,singleton_ids,value)
+    for index,(ids,q) in enumerate(groups):
+        if singleton_group_mask[index] or not q.shape[-1]:continue
+        coefficient=torch.einsum('bnip,bniq->bpq',q,source[:,ids])
+        result=result.index_add(1,ids,torch.einsum('bnip,bpq->bniq',q,coefficient))
+    return (result[...,0] if vector else result).to(value.dtype)
 
 
 def centers(scene, state):

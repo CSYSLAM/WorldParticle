@@ -18,6 +18,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--asset',type=Path,default=Path.home()/'下载/assets/w1-030/robot.urdf')
     p.add_argument('--checkpoint',type=Path,default=ROOT/'model_releases/shared_vbd_v24_cloth40/model.pt')
+    p.add_argument('--execution-policy',choices=('reference','assembly','fused','fused_search','fused_fast','fused_device','fused_graph'),default='reference')
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--frames',type=int)
     p.add_argument('--objects',choices=('blocks','cylinder_ball'),default='cylinder_ball')
@@ -78,6 +79,8 @@ def main():
     stored=torch.load(a.checkpoint,map_location='cpu',weights_only=True)
     config=dict(stored.get('model_config') or stored['config']['model'])
     config.update(mimic_metric_tangent=True,periodic_bending=True)
+    from wp_vbd.inference_policy import configure
+    config=configure(config,a.execution_policy)
     network=MixedSolver(config).to(a.device).eval();network.load_state_dict(stored['model'])
     if a.style in ('front','side'):network.config['line_search']=[2.**(-i) for i in range(13)]
     scene=export_model(e.model,configuration,'research.w1_dual_grasp',newton,e.sim_dt,a.device)
@@ -182,7 +185,7 @@ def main():
             branch['numerical_friction_support_transition']={'from':previous_support,'to':requested_rigid_support,
                 'after_verified_frame':resume_frame+1,'physical_friction_coefficient_unchanged':True}
     def report(status):
-        r={'status':status,'mode':'shared_network_inference','scene':'research.w1_dual_grasp','asset':str(a.asset.resolve()),
+        r={'execution_policy':a.execution_policy,'status':status,'mode':'shared_network_inference','scene':'research.w1_dual_grasp','asset':str(a.asset.resolve()),
           'asset_sha256':hashlib.sha256(a.asset.read_bytes()).hexdigest(),'checkpoint':str(a.checkpoint.resolve()),
           'checkpoint_sha256':checkpoint_sha,'checkpoint_step':stored['step'],'newton_source':provenance,
           'device':a.device,'physics_device':str(e.model.device),'physical_dt':e.sim_dt,'substeps':a.substeps,
@@ -224,7 +227,10 @@ def main():
             table_bounds_xy=[.445,.985,-.6,.6],motion='Reach horizontally 4 cm, side pinch, lift 9 cm, draw back 10 cm, hold.',
             minimum_robot_visual_table_clearance_m=min(r['minimum_robot_visual_table_clearance_m'] for r in table_measurements
                                                        if r['minimum_robot_visual_table_clearance_m'] is not None))
-        tmp=a.output/'run.tmp';tmp.write_text(json.dumps(r,indent=2)+'\n');tmp.replace(a.output/'run.json')
+        cache=getattr(scene,'_response_index_workspace',None)
+        if cache is not None:r['response_index_cache']=cache.report()
+        from wp_vbd.diagnostic_io import to_plain
+        tmp=a.output/'run.tmp';tmp.write_text(json.dumps(to_plain(r),indent=2)+'\n');tmp.replace(a.output/'run.json')
     report('RUNNING')
     try:
         with torch.no_grad():

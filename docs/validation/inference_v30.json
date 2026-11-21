@@ -1,0 +1,449 @@
+{
+  "schema": "wp_v30_execution_validation_summary_v1",
+  "checkpoint_sha256": "1aac9909419fbb8dda7beef4f0d533050d4ce4191849ebd54ba37dd6a85a2132",
+  "status": "PASS_TASKS",
+  "scope": "Controlled current v29-policy ablation versus v30; historical absolute FPS are not controlled speedup measurements. Seven short windows do not certify all workloads. Controller is once per frame, unlike old v29 benchmark cadence.",
+  "benchmarks": {
+    "franka": {
+      "status": "COMPLETE",
+      "previous_graph_seconds": 0.44961026997771114,
+      "v30_seconds": 0.4400818980066106,
+      "latency_reduction_percent": 2.119251406684486,
+      "paired_percent_median": 2.119251406684486,
+      "paired_percent_range": [
+        -14.81614533929292,
+        3.74001993646379
+      ],
+      "samples_per_variant": 7,
+      "checks": {
+        "finite_timings": true,
+        "same_neural_budget": true,
+        "same_physical_steps": true,
+        "same_controller_targets": true,
+        "correct_controller_cadence": true,
+        "no_retries": true,
+        "short_window_numerically_equivalent": true
+      },
+      "scope": "Interleaved held-state frame loop including original IK controller, native joint readout and in-memory recording. No video rendering, file compression or whole-task FPS claim. Other GPU tasks are not stopped.",
+      "held_frame_fps": 2.2723043245577412
+    },
+    "cloth": {
+      "status": "COMPLETE",
+      "previous_graph_seconds": 0.45885809598257765,
+      "v30_seconds": 0.4397447149967775,
+      "latency_reduction_percent": 4.165423069385243,
+      "paired_percent_median": 3.567164239519305,
+      "paired_percent_range": [
+        1.6742441666868113,
+        4.396550735769811
+      ],
+      "samples_per_variant": 7,
+      "checks": {
+        "finite_timings": true,
+        "same_neural_budget": true,
+        "same_physical_steps": true,
+        "same_controller_targets": true,
+        "correct_controller_cadence": true,
+        "no_retries": true,
+        "short_window_numerically_equivalent": true
+      },
+      "scope": "Interleaved solver-only latency at an accepted own-model final state; no controller, rendering or trajectory serialization. Other GPU tasks are not stopped.",
+      "held_frame_fps": null
+    },
+    "w1": {
+      "status": "COMPLETE",
+      "previous_graph_seconds": 0.6233980259858072,
+      "v30_seconds": 0.6033429459785111,
+      "latency_reduction_percent": 3.21705863209657,
+      "paired_percent_median": 3.493336031884975,
+      "paired_percent_range": [
+        2.4762503632178134,
+        4.770555012847943
+      ],
+      "samples_per_variant": 7,
+      "checks": {
+        "finite_timings": true,
+        "same_neural_budget": true,
+        "same_physical_steps": true,
+        "same_controller_targets": true,
+        "correct_controller_cadence": true,
+        "no_retries": true,
+        "short_window_numerically_equivalent": true
+      },
+      "scope": "Interleaved solver-only latency at an accepted own-model final state; no controller, rendering or trajectory serialization. Other GPU tasks are not stopped.",
+      "held_frame_fps": null
+    }
+  },
+  "full_tasks": {
+    "franka": {
+      "status": "PASS_TASK",
+      "frames": 270,
+      "neural_calls": 810,
+      "physical_steps": 810,
+      "wall_seconds": 226.6825873539783,
+      "recorded_loop_fps": 1.191092810222688,
+      "checks": {
+        "complete": true,
+        "same_weights": true,
+        "no_native_dynamics": true,
+        "no_teacher": true,
+        "no_optimizer": true,
+        "one_neural_call_per_step": true,
+        "no_retries": true,
+        "all_auditors_exit_zero": true,
+        "whole_block_clear_5mm": true,
+        "sustained_250ms": true,
+        "volume_safe": true,
+        "overlap_below_4mm": true
+      },
+      "strict_numerical_regression_vs_reference": "FAIL",
+      "strict_numerical_regression_vs_v29": "FAIL",
+      "gpu_budget": {
+        "enabled": true,
+        "process_budget_gib": 16.0,
+        "torch_allocator_cap_gib": 14.0,
+        "native_reserve_gib": 2,
+        "observed_process_max_mib": 2480.0,
+        "process_observations": 72,
+        "trim_idle_torch_cache_before_observation": false,
+        "idle_cache_trims": 0,
+        "idle_cache_bytes_released": 0,
+        "scope": "Torch allocator cap; native process memory sampled between frames at most every two seconds. Native allocations have no hard allocator cap; transient process peaks may be missed. Monitoring is included in inference wall time.",
+        "peak_torch_allocated_bytes": 1062136832,
+        "peak_torch_reserved_bytes": 1470103552
+      }
+    },
+    "cloth": {
+      "status": "PASS_TASK",
+      "frames": 168,
+      "neural_calls": 504,
+      "physical_steps": 504,
+      "wall_seconds": 167.4556917969603,
+      "recorded_loop_fps": 1.0032504610455384,
+      "checks": {
+        "complete": true,
+        "same_weights": true,
+        "no_native_dynamics": true,
+        "no_teacher": true,
+        "no_optimizer": true,
+        "one_neural_call_per_step": true,
+        "no_retries": true,
+        "all_auditors_exit_zero": true,
+        "original_task_audit_passed": true
+      },
+      "strict_numerical_regression_vs_reference": "FAIL",
+      "strict_numerical_regression_vs_v29": "FAIL",
+      "gpu_budget": null
+    },
+    "w1": {
+      "status": "PASS_TASK",
+      "frames": 288,
+      "neural_calls": 877,
+      "physical_steps": 877,
+      "wall_seconds": 284.9130847079796,
+      "recorded_loop_fps": 1.0108345859060293,
+      "checks": {
+        "complete": true,
+        "same_weights": true,
+        "no_native_dynamics": true,
+        "no_teacher": true,
+        "no_optimizer": true,
+        "one_neural_call_per_step": true,
+        "no_retries": true,
+        "all_auditors_exit_zero": true,
+        "original_task_audit_passed": true
+      },
+      "strict_numerical_regression_vs_reference": "FAIL",
+      "strict_numerical_regression_vs_v29": "FAIL",
+      "gpu_budget": null
+    }
+  },
+  "full_task_timing_scope": "Recorded loop, including in-loop lazy compilation/control/collision/checks/recording; excludes some front-end setup and video rendering. CPU audits/rendering of an already completed scene could overlap the next inference run. Not a controlled full-task speedup comparison.",
+  "video_scope": "Videos remain local under outputs/inference_speed_v30/videos; offline replay FPS is not inference FPS.",
+  "default_selection": {
+    "status": "PASS",
+    "suite_default_selection": [
+      {
+        "scene": "franka",
+        "device": "cuda:0",
+        "selected_policy": "fused_graph"
+      },
+      {
+        "scene": "w1",
+        "device": "cuda:0",
+        "selected_policy": "fused_graph"
+      },
+      {
+        "scene": "cloth",
+        "device": "cuda:0",
+        "selected_policy": "fused_graph"
+      },
+      {
+        "scene": "piper",
+        "device": "cuda:0",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "w1_dual",
+        "device": "cuda:0",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "franka_rigid_cloth",
+        "device": "cuda:0",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "franka",
+        "device": "cpu",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "w1",
+        "device": "cpu",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "cloth",
+        "device": "cpu",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "piper",
+        "device": "cpu",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "w1_dual",
+        "device": "cpu",
+        "selected_policy": "reference"
+      },
+      {
+        "scene": "franka_rigid_cloth",
+        "device": "cpu",
+        "selected_policy": "reference"
+      }
+    ],
+    "individual_wrapper_dry_runs": 18,
+    "explicit_choices_preserved": true,
+    "offline_vbd_auto_reference": true,
+    "direct_cli_accepts_auto": true,
+    "no_model_or_physics_execution": true
+  },
+  "settings_checks": {
+    "status": "PASS",
+    "nested_inference_settings_restored": true,
+    "exception_restores_settings": true,
+    "gradient_enabled_training_unchanged": true,
+    "reference_settings_unchanged": true,
+    "precision_controls_untouched": true,
+    "compiler_mode_and_specialization_budget_scoped_and_restored": true,
+    "graph_scope_nested_exception_and_training_restored": true,
+    "fused_checks_follow_policy_and_disable_in_training": true
+  },
+  "physics_checks": {
+    "fused_checks_cpu.json": {
+      "status": "PASS",
+      "device": "cpu",
+      "exact_component_labels": [
+        {
+          "nodes": 0,
+          "rows": 0,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 0,
+          "rows": 0,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 1,
+          "rows": 0,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 1,
+          "rows": 0,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 1,
+          "rows": 9,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 1,
+          "rows": 9,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 8,
+          "rows": 32,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 8,
+          "rows": 32,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 31,
+          "rows": 123,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 31,
+          "rows": 123,
+          "incidence_dtype": "torch.int64"
+        }
+      ],
+      "bound_cases": [
+        {
+          "shape": [
+            0
+          ],
+          "max_error": 0.0
+        },
+        {
+          "shape": [
+            41
+          ],
+          "max_error": 0.0
+        },
+        {
+          "shape": [
+            2,
+            79
+          ],
+          "max_error": 0.0
+        }
+      ],
+      "unchanged_rejection_messages_and_priority": [
+        "kind",
+        "owner",
+        "relation",
+        "mobility",
+        "empty_enabled",
+        "mask",
+        "batch_id",
+        "bound_nan",
+        "bound_negative",
+        "bound_overflow",
+        "bound_priority"
+      ],
+      "int64_metadata_not_routed_through_float": true,
+      "only_unused_layout_slots_omitted": true
+    },
+    "fused_checks_gpu.json": {
+      "status": "PASS",
+      "device": "cuda:0",
+      "exact_component_labels": [
+        {
+          "nodes": 0,
+          "rows": 0,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 0,
+          "rows": 0,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 1,
+          "rows": 0,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 1,
+          "rows": 0,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 1,
+          "rows": 9,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 1,
+          "rows": 9,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 8,
+          "rows": 32,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 8,
+          "rows": 32,
+          "incidence_dtype": "torch.int64"
+        },
+        {
+          "nodes": 31,
+          "rows": 123,
+          "incidence_dtype": "torch.int32"
+        },
+        {
+          "nodes": 31,
+          "rows": 123,
+          "incidence_dtype": "torch.int64"
+        }
+      ],
+      "bound_cases": [
+        {
+          "shape": [
+            0
+          ],
+          "max_error": 0.0
+        },
+        {
+          "shape": [
+            41
+          ],
+          "max_error": 0.0
+        },
+        {
+          "shape": [
+            2,
+            79
+          ],
+          "max_error": 0.0
+        }
+      ],
+      "unchanged_rejection_messages_and_priority": [
+        "kind",
+        "owner",
+        "relation",
+        "mobility",
+        "empty_enabled",
+        "mask",
+        "batch_id",
+        "bound_nan",
+        "bound_negative",
+        "bound_overflow",
+        "bound_priority"
+      ],
+      "int64_metadata_not_routed_through_float": true,
+      "only_unused_layout_slots_omitted": true
+    },
+    "kinematics.json": {
+      "status": "PASS",
+      "exact_repeated_geometry": true,
+      "state_and_com_mutations_invalidate": true,
+      "contact_source_mutation_invalidates": true,
+      "nonfinite_or_degenerate_state_not_hidden": true,
+      "gradient_enabled_cache_bypass": true,
+      "unversioned_tensor_cache_bypass": true,
+      "bounded_storage_and_scope_cleanup": true,
+      "retained_input_and_view_storage_budgeted": true,
+      "native_dynamics_calls": 0,
+      "optimizer_updates": 0
+    }
+  },
+  "limitations": [
+    "All three complete strict numerical trajectory comparisons FAIL; original task audits PASS.",
+    "Only Franka soft block, cloth corner and W1 bag CUDA scene families enabled automatically.",
+    "Seven-sample short windows do not establish controlled full-task speedups; one Franka paired sample regressed.",
+    "Simple cloth has no self-contact and long-horizon drape robustness is not certified."
+  ]
+}

@@ -10,6 +10,7 @@ import time
 import traceback
 
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
+from wp_vbd.inference_policy import CLI_POLICIES,resolve_policy
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 
 
@@ -17,6 +18,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--asset',type=Path,default=Path.home()/'下载/assets/w1-030/robot.urdf')
     parser.add_argument('--checkpoint',type=Path,default=ROOT/'model_releases/shared_vbd_v24_cloth40/model.pt')
+    parser.add_argument('--execution-policy',choices=CLI_POLICIES,default='auto')
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--frames',type=int,default=288)
     parser.add_argument('--substeps',type=int,default=3)
@@ -47,6 +49,7 @@ def main():
     parser.add_argument('--geometry-only',action='store_true')
     parser.add_argument('--full-diagnostics',action='store_true',help='Record physical ray values and inverse validity for numerical diagnosis')
     args=parser.parse_args()
+    args.execution_policy=resolve_policy(args.execution_policy,scene='w1',device='cpu' if args.geometry_only else args.device)
     if args.frames<1 or args.substeps<1:parser.error('Positive frames and substeps required')
     if args.adaptive and args.resume:
         parser.error('Adaptive continuation requires a new recording with its own time-step history')
@@ -130,6 +133,8 @@ def main():
     if args.analytic_elastic_shape_response:
         if not args.elastic_shape_response:parser.error('--analytic-elastic-shape-response requires --elastic-shape-response')
         config['learned_elastic_shape_direction']=False
+    from wp_vbd.inference_policy import configure
+    config=configure(config,args.execution_policy)
     network=MixedSolver(config).to(args.device).eval()
     missing,unexpected=network.load_state_dict(stored['model'],strict=False)
     expected_extra=({key for key in stored['model'] if key.startswith('elastic_shape_head.')}
@@ -231,7 +236,7 @@ def main():
         target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(payload)
     (args.output/'implementation_snapshot_manifest.json').write_text(json.dumps(source_hashes,indent=2)+'\n')
     def report(status):
-        r=dict(status=status,mode='shared_network_inference',scene='research.w1_bag',asset=str(args.asset),asset_sha256=asset_sha,
+        r=dict(execution_policy=args.execution_policy,status=status,mode='shared_network_inference',scene='research.w1_bag',asset=str(args.asset),asset_sha256=asset_sha,
             checkpoint=str(args.checkpoint.resolve()),checkpoint_sha256=checkpoint_sha,checkpoint_step=stored['step'],newton_source=provenance,
             device=args.device,physics_device=str(e.model.device),frames_completed=frame,frames_requested=args.frames,
             physical_seconds=solver.physical_time,
@@ -266,7 +271,10 @@ def main():
         r['adaptive_min_accepted_dt_s']=solver.adaptive_min_accepted_dt
         if solver.adaptive_stepper is not None and solver.last_diagnostic:
             r['last_adaptive_interval']=solver.last_diagnostic.get('adaptive')
-        temporary=args.output/'run.tmp';temporary.write_text(json.dumps(r,indent=2)+'\n');temporary.replace(args.output/'run.json')
+        cache=getattr(scene,'_response_index_workspace',None)
+        if cache is not None:r['response_index_cache']=cache.report()
+        from wp_vbd.diagnostic_io import to_plain
+        temporary=args.output/'run.tmp';temporary.write_text(json.dumps(to_plain(r),indent=2)+'\n');temporary.replace(args.output/'run.json')
     from wp_vbd.live_view import LiveView
     live=LiveView(e.model,enabled=args.window,position=(2.,-1.5,1.8),target=(.3,0.,1.12))
     report('RUNNING')

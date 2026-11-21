@@ -180,8 +180,12 @@ def build_plan(graph, maximum_super_tokens=128):
         ids=torch.where((graph.interaction_id==label)&graph.movable)[0]
         if not len(ids):continue
         keys={}
-        for local, entity in enumerate(ids.tolist()):
-            key=(int(graph.object_id[entity]),int(graph.kind[entity]))
+        # Partition metadata is discrete. Transfer it together instead of
+        # synchronizing twice per entity when the graph lives on CUDA. The
+        # ascending ids, sorted keys and local member order remain identical.
+        metadata=torch.stack((graph.object_id[ids],graph.kind[ids]),-1).cpu().tolist()
+        for local, (object_id, kind) in enumerate(metadata):
+            key=(object_id,kind)
             keys.setdefault(key,[]).append(local)
         groups=tuple(torch.tensor(value,device=ids.device) for _,value in sorted(keys.items()))
         counts=[len(group) for group in groups];rounds=0
