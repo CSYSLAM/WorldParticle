@@ -1,0 +1,84 @@
+{
+  "schema": "wp_learnable_physics_audit_v31",
+  "status": "DIAGNOSTIC_COMPLETE_NOT_NEW_MODEL",
+  "local_source_commit": "edf6aac91c929a6233da06c149d81dcf65e88d85",
+  "published_code_commit": "3749a11ef96b504dcbfe74befffedade629691ec",
+  "case": "franka_soft_held_state",
+  "input_recording": "outputs/inference_speed_v30/recordings/franka",
+  "physical_steps": 3,
+  "neural_calls": 3,
+  "samples_per_variant": 1,
+  "checks": {
+    "finite_timings": true,
+    "same_neural_budget": true,
+    "same_physical_steps": true,
+    "same_controller_targets": true,
+    "correct_controller_cadence": true,
+    "no_retries": true,
+    "short_window_numerically_equivalent": true
+  },
+  "ranges": {
+    "wp.shared_backbone": {
+      "calls": 3,
+      "wall_seconds": 0.01945020299172029,
+      "cuda_stream_seconds": 0.019898079872131345
+    },
+    "wp.physical_assembly": {
+      "calls": 9,
+      "wall_seconds": 0.11497896106448025,
+      "cuda_stream_seconds": 0.11488105583190916
+    },
+    "wp.articulation_modes": {
+      "calls": 9,
+      "wall_seconds": 0.06161159905605018,
+      "cuda_stream_seconds": 0.06138748836517333
+    },
+    "wp.protected_basis": {
+      "calls": 9,
+      "wall_seconds": 0.021890811971388757,
+      "cuda_stream_seconds": 0.025923967599868775
+    },
+    "wp.analytic_material_correction": {
+      "calls": 9,
+      "wall_seconds": 0.05134873290080577,
+      "cuda_stream_seconds": 0.042298431873321524
+    },
+    "wp.line_search": {
+      "calls": 12,
+      "wall_seconds": 0.1129979612887837,
+      "cuda_stream_seconds": 0.11285955286026002
+    },
+    "wp.merit": {
+      "calls": 36,
+      "wall_seconds": 0.058203234686516225,
+      "cuda_stream_seconds": 0.06044870400428772
+    },
+    "wp.learned_response_including_physical_projection": {
+      "calls": 3,
+      "wall_seconds": 0.05519952502800152,
+      "cuda_stream_seconds": 0.06624048042297363
+    },
+    "wp.solver_step": {
+      "calls": 1,
+      "wall_seconds": 0.7172662689699791,
+      "cuda_stream_seconds": 0.7172620849609375
+    }
+  },
+  "selected_python_counts": [
+    {
+      "function": "elastic_shape_modes.py:21:polynomial_basis",
+      "calls": 18
+    },
+    {
+      "function": "elastic_shape_modes.py:264:response_columns",
+      "calls": 9
+    }
+  ],
+  "profile_sha256": "0743df113e17f4498ab8783d87f15007801213754f4b3bb9a78ecd8a2e5e82b6",
+  "scope": "Instrumented simulation only, excluding initialization. CUDA-stream intervals include CPU submission gaps and stream idle time; these are not sums of kernel busy time. Ranges are nested/inclusive: backbone is inside learned response; material/basis/line-search and collision are inside solver. Do not add inclusive ranges. The response includes physical projection, so it is not pure network latency. No per-operator event trace is retained; profiler overhead invalidates speedup claims.",
+  "limitations": [
+    "Single held-state diagnostic, not whole-scene or all-types validation.",
+    "Inclusive ranges must not be summed or interpreted as independent kernel time.",
+    "No new training, model architecture implementation or speedup claim."
+  ]
+}

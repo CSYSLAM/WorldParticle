@@ -58,6 +58,8 @@ python scripts/run_robot_demo_suite.py --output outputs/my_robot_suite
 
 最新一轮在图路径合并物理检查与拓扑元数据传输，省去未使用的关系槽位，并接入单步纯运动学缓存。现已默认采用 `auto`：CUDA 的 Franka 软块、单角抓布和 W1 装袋自动选择 `fused_graph`；CPU 和其余三个场景保留 `reference`，显式策略参数优先。同条件七样本短窗对前一版图配置耗时降低约 2.1% / 4.2% / 3.2%（Franka / 抓布 / W1）；Franka 保持段约 2.27 FPS，包含预热的完整计时约 1.19 FPS，仍未实时。实现、测时边界与完整任务结果见 [同步与运动学优化](docs/inference_execution_v30.md) 和 [结果目录](outputs/inference_speed_v30/README.md)。
 
+后续优先评估将材料补偿、重复解析响应与部分近似逆交给共享网络学习；源码审计、GPU 调用计数及分阶段设计见 [可学习物理模块评估](docs/learned_physics_replacement_v31.md)。该方案尚未实现或训练，不属于当前默认推理的能力。
+
 ## 研究边界
 
 原生 VBD 仅用于离线教师和独立参考，模型推理不调用 VBD、Featherstone 或原生求解器回退。材料本构、接触、关节、解析预测、约束检查等物理计算仍然存在。当前不宣称纯单次前向替代整个求解器，也没有证明相对原生 VBD 的通用精度或速度优势。
