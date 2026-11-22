@@ -1,0 +1,102 @@
+{
+  "status": "MEASURED_V32_EVIDENCE_NOT_V33_RESULTS",
+  "published": {
+    "branch": "research/shared-vbd-v32-20261121",
+    "commit": "873ef8d05e22e9572a589cbd39eeb0f87579922a",
+    "tag": "shared-vbd-v32-a1-20261121",
+    "remote_refs_verified": true
+  },
+  "profile": {
+    "wp.solver_step": {
+      "calls": 1,
+      "wall_seconds": 0.6403041440062225,
+      "cuda_stream_seconds": 0.6402913208007812
+    },
+    "wp.shared_backbone": {
+      "calls": 3,
+      "wall_seconds": 0.021109811030328274,
+      "cuda_stream_seconds": 0.021069472312927245
+    },
+    "wp.physical_assembly": {
+      "calls": 6,
+      "wall_seconds": 0.0852661770186387,
+      "cuda_stream_seconds": 0.08520655918121339
+    },
+    "wp.articulation_modes": {
+      "calls": 6,
+      "wall_seconds": 0.045724331052042544,
+      "cuda_stream_seconds": 0.044632095813751216
+    },
+    "wp.line_search": {
+      "calls": 9,
+      "wall_seconds": 0.09559375804383308,
+      "cuda_stream_seconds": 0.09546313619613647
+    },
+    "wp.analytic_material_correction": {
+      "calls": 3,
+      "wall_seconds": 0.020997982006520033,
+      "cuda_stream_seconds": 0.020876448154449462
+    }
+  },
+  "profile_scope": "Single warmed Franka held state; three interleaved timing samples per policy. Profiled intervals overlap and include instrumentation/CPU submission gaps. No universal kernel-time fractions or cross-scene speedup claim.",
+  "execution_policy_coverage": {
+    "fused_graph_auto": [
+      "franka",
+      "cloth",
+      "w1"
+    ],
+    "reference_auto": [
+      "piper",
+      "w1_dual",
+      "franka_rigid_cloth"
+    ]
+  },
+  "held_frame_timings": {
+    "reference": {
+      "median_seconds": 1.1609797429991886,
+      "samples": 3,
+      "speedup_vs_reference": 1.0,
+      "held_frame_fps": 0.8613414713134223
+    },
+    "fused_graph": {
+      "median_seconds": 0.5169629639713094,
+      "samples": 3,
+      "speedup_vs_reference": 2.245769666129547,
+      "held_frame_fps": 1.9343745484550774
+    }
+  },
+  "training_gaps": [
+    "scripts/train_analytic_corrector.py parameter mask excludes shared_material_head.",
+    "Full-course rollout objective does not add shared_material_supervision auxiliary loss",
+    "Current robot-cloth trainer uses fixed approximately 1/180 dt; no demonstrated variable-step training"
+  ],
+  "piper": {
+    "cases": {
+      "v24_a2": {
+        "minimum_ratio": 0.6054756656789417,
+        "worst_time_s": 3.616666666666655,
+        "worst_phase": "release soft block",
+        "max_cells_below_point15": 0,
+        "frames_with_ratio_below_point15": 0,
+        "minimum_global_volume_ratio": 0.8757067301184652,
+        "final_minimum_ratio": 0.9610578522430087
+      },
+      "v32_a1": {
+        "minimum_ratio": 0.04290994071356177,
+        "worst_time_s": 3.0833333333333237,
+        "worst_phase": "lower to rigid cube",
+        "max_cells_below_point15": 1,
+        "frames_with_ratio_below_point15": 3,
+        "minimum_global_volume_ratio": 0.863991246004855,
+        "final_minimum_ratio": 0.9648520155553615
+      }
+    },
+    "matched_inputs": {
+      "same_asset": true,
+      "same_physical_parameters": true,
+      "same_motor_target_shape": true,
+      "motor_target_max_abs_difference": 0.0
+    },
+    "causal_attribution": "Not identified: weight and analytic budget both changed"
+  }
+}

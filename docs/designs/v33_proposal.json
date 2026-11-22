@@ -1,0 +1,170 @@
+{
+  "schema": "shared_vbd_major_optimization_design_v33",
+  "status": "DESIGN_ONLY_NOT_IMPLEMENTED",
+  "runtime_enabled": false,
+  "baseline": {
+    "branch": "research/shared-vbd-v32-20261121",
+    "commit": "873ef8d05e22e9572a589cbd39eeb0f87579922a",
+    "tag": "shared-vbd-v32-a1-20261121",
+    "remote_refs_verified": true
+  },
+  "proposed_architecture_id": "shared_direct_response_v33",
+  "shared_across_types": [
+    "soft",
+    "cloth",
+    "free_rigid",
+    "vbd_supported_joints",
+    "rod_cable"
+  ],
+  "backbone": {
+    "width": 648,
+    "attention_heads": 12,
+    "encoder_layers": 6,
+    "decoder_layers": 4,
+    "full_resolution_local_path": true,
+    "global_tokens_max": 128,
+    "forward_calls_per_physical_step": 1
+  },
+  "candidate_capacity": {
+    "dense_control": true,
+    "optional_experts": [
+      4,
+      8
+    ],
+    "candidate_top_k": [
+      1,
+      2
+    ],
+    "preferred_initial_sparse_candidate": {
+      "experts": 4,
+      "top_k": 2
+    },
+    "replaced_ffns": [
+      "encoder.4.ffn",
+      "encoder.5.ffn",
+      "decoder.2.ffn",
+      "decoder.3.ffn"
+    ],
+    "routing": "Causal mechanism/state conditions; no demo-specific or type-exclusive solver",
+    "all_experts_gpu_resident": true,
+    "drop_tokens_allowed": false,
+    "parameter_budget_file": "v33_capacity_estimate.json"
+  },
+  "operator_contract": {
+    "seed_modes": [
+      "one_full_v32_analytic_seed",
+      "mass_reference_diagonal_seed"
+    ],
+    "network_phase_required_absences": [
+      "fresh_full_H",
+      "fresh_H_inverse_blocks",
+      "ProtectedCoarse",
+      "H_energy_gram",
+      "inverse_replacement",
+      "analytic_material_reduced_solve",
+      "full_material_merit_search"
+    ],
+    "retained": [
+      "mass_inertia",
+      "external_forces",
+      "first_order_material_features",
+      "actual_contact_geometry",
+      "valid_DOF_SO3",
+      "bounded_joint_geometry_projection",
+      "bounded_local_repair"
+    ],
+    "teacher_queries_in_inference": 0,
+    "native_vbd_fallback": false,
+    "geometry_graph_independent_of_H_terms": true
+  },
+  "correction_contract": {
+    "reference_state": "student_seed_at_same_physical_interval",
+    "primary_output": "one_total_correction_with_geometric_global_local_split",
+    "h_metric_orthogonality_claim": false,
+    "automatic_stability_claim": false,
+    "independent_full_contact_impulse_addition": false
+  },
+  "gpu_runtime": {
+    "canonical_state": "GPUState",
+    "precision_modes": [
+      "native_compatible_quantization",
+      "resident_fp64_separately_validated"
+    ],
+    "nn_dtype": "fp32_initially",
+    "contact_batch": "GPU capacity/count/valid/feature_ids",
+    "no_contact_truncation": true,
+    "warp_torch_stream_ownership_explicit": true,
+    "async_recording_source_lifetime_events": true,
+    "native_fp32_quantization_is_part_of_baseline_semantics": true
+  },
+  "step_and_repair_budget": {
+    "initial_substeps_per_frame": 3,
+    "target_substeps_per_frame": 2,
+    "target_dt": 0.008333333333333333,
+    "geometry_scale_candidates_max": 3,
+    "local_repair_sweeps_default": 2,
+    "local_repair_sweeps_max": 4,
+    "interval_split_depth_max": 1,
+    "all_extra_work_counted": true
+  },
+  "training": {
+    "full_pure_vbd_demos": 42,
+    "augmentation_train": 300,
+    "augmentation_dev": 30,
+    "extra_cases": "Targeted robot/contact/material hard cases, not arbitrary unrealistic expansion",
+    "fine_teacher_endpoint_labels": true,
+    "coarse_trajectory_interpolation_as_truth": false,
+    "suggested_recording_dt": 0.002777777777777778,
+    "full_trainer_material_head_and_auxiliary_loss_wiring_required": true,
+    "global_local_state_and_rollout_primary_loss": true,
+    "per_object_tail_and_duration_quality": true,
+    "teacher_latent_distillation": "Optional adapter warmup only",
+    "time_discretization_residual_consistency_not_forced": true,
+    "stop_at_development_plateau": true,
+    "missing_history_requires_causal_burnin_or_valid_student_replay": true
+  },
+  "phases": [
+    {
+      "id": 0,
+      "name": "same_execution_baseline_and_transfer_sync_inventory",
+      "weight_changes": false
+    },
+    {
+      "id": 1,
+      "name": "direct_response_and_cheap_features",
+      "seed": "one_full_v32_analytic_seed",
+      "substeps": 3,
+      "major_H_assemblies_per_frame": 3
+    },
+    {
+      "id": 2,
+      "name": "gpu_resident_runtime_and_local_seed",
+      "seed": "mass_reference_diagonal_seed",
+      "substeps": 3,
+      "major_H_assemblies_per_frame": 0
+    },
+    {
+      "id": 3,
+      "name": "trained_larger_dt",
+      "seed": "mass_reference_diagonal_seed",
+      "substeps": 2,
+      "major_H_assemblies_per_frame": 0
+    },
+    {
+      "id": "capacity",
+      "name": "dense_vs_matched_compute_dense_vs_sparse_experts"
+    }
+  ],
+  "performance": {
+    "stage1_full_latency_reduction_research_target": 0.25,
+    "later_speedup_research_target": 2.0,
+    "promised_or_measured_v33_speedup": false
+  },
+  "forbidden_claims": [
+    "Sparse top-k is whole-frame activated parameter count",
+    "Sparse experts avoid storing inactive expert weights or optimizer states",
+    "Changing FP32 state round trips into continuous FP64 is a numerically identical copy optimization",
+    "Positive parameterization or geometric orthogonality proves nonlinear stability",
+    "Six task checks prove every official demo, unseen asset or continuous nonpenetration"
+  ]
+}

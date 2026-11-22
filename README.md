@@ -6,6 +6,8 @@
 
 本分支还保存最新 **v32 / A1+N1 / step64 研究快照**，复用共享特征学习材料补偿，活跃参数 47,137,509。六项固定 GPU 任务已完成各自检查；Piper 局部单元压缩仍需复核，因此默认稳定入口保持 v24。最新权重与精确参数见 [v32 模型目录](model_releases/shared_vbd_v32_a1/README.md)，实际覆盖与材料质量边界见 [六例扩展验证](docs/v32_six_scene_validation.md)。
 
+下一轮 [v33 大优化设计](docs/architecture_v33_gpu_direct_response.md)提出直接学习状态校正、删除网络阶段的重复矩阵/约化求解、GPU 常驻状态、受训练的大步长和可选条件专家。当前仅完成设计与参数预算工具，尚未实现或训练，不改变现有默认模型。
+
 ## 模型与环境
 
 [当前模型目录](model_releases/shared_vbd_v24_cloth40/README.md)包含精确配置、校验摘要和六个不超过 32 MiB 的权重分块；与本次源代码一起提交。完整权重 188,146,967 字节，SHA256 `1aac9909419fbb8dda7beef4f0d533050d4ce4191849ebd54ba37dd6a85a2132`。

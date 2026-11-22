@@ -1,0 +1,56 @@
+{
+  "status": "DESIGN_ESTIMATE_NOT_IMPLEMENTATION",
+  "base_active_parameters": 47137509,
+  "width": 648,
+  "expert_hidden": 1296,
+  "parameters_per_ffn": 1681560,
+  "candidates": [
+    {
+      "experts": 4,
+      "top_k": 1,
+      "replaced_ffns": 4,
+      "total_parameter_proxy": 67326613,
+      "per_token_path_parameter_proxy": 47147893,
+      "dense_matched_expert_matmul_proxy": 47137509,
+      "fp32_parameter_bytes": 269306452,
+      "fp32_adamw_weight_gradient_two_moments_bytes": 1077225808
+    },
+    {
+      "experts": 4,
+      "top_k": 2,
+      "replaced_ffns": 4,
+      "total_parameter_proxy": 67326613,
+      "per_token_path_parameter_proxy": 53874133,
+      "dense_matched_expert_matmul_proxy": 53861157,
+      "fp32_parameter_bytes": 269306452,
+      "fp32_adamw_weight_gradient_two_moments_bytes": 1077225808
+    },
+    {
+      "experts": 8,
+      "top_k": 1,
+      "replaced_ffns": 4,
+      "total_parameter_proxy": 94241957,
+      "per_token_path_parameter_proxy": 47158277,
+      "dense_matched_expert_matmul_proxy": 47137509,
+      "fp32_parameter_bytes": 376967828,
+      "fp32_adamw_weight_gradient_two_moments_bytes": 1507871312
+    },
+    {
+      "experts": 8,
+      "top_k": 2,
+      "replaced_ffns": 4,
+      "total_parameter_proxy": 94241957,
+      "per_token_path_parameter_proxy": 53884517,
+      "dense_matched_expert_matmul_proxy": 53861157,
+      "fp32_parameter_bytes": 376967828,
+      "fp32_adamw_weight_gradient_two_moments_bytes": 1507871312
+    }
+  ],
+  "exclusions": [
+    "New feature adapters/readouts are not added; retired response heads are not subtracted",
+    "Path proxy is not whole-frame activated parameters, FLOPs or measured latency",
+    "All experts remain GPU-resident; sparse activation does not remove their storage",
+    "Activation, physical state, cache, allocator and routing workspace are not included",
+    "Matched dense proxy ignores dispatch/router costs and does not assert equal wall time"
+  ]
+}
