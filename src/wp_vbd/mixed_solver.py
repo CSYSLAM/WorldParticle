@@ -223,6 +223,17 @@ class MixedSolver(nn.Module):
             if self.elastic_shape_head is not None:
                 raise ValueError('Analytic predictor uses physical elastic directions; disable learned elastic heads')
             self.architecture_id='shared_analytic_predictor_v24'
+        self.shared_material_head=None
+        if config.get('shared_material_correction',False):
+            if not config.get('shared_hierarchy') or not config.get('analytic_elastic_postsolve'):
+                raise ValueError('Shared material correction requires hierarchy and analytic predictor baseline')
+            if self.elastic_shape_head is not None:
+                raise ValueError('Shared material correction replaces the final material solve; retire the old elastic head')
+            from .shared_material_correction import SharedMaterialCorrection
+            self.shared_material_head=SharedMaterialCorrection(config.get('protected_width',32),
+                hidden=config.get('shared_material_hidden',256))
+            self.protected_response.shared_material_features=True
+            self.architecture_id='shared_material_corrector_v31'
         if config.get('compiled_objective',False):
             self.objective=torch.compile(incremental_objective,fullgraph=True,dynamic=False,options={'triton.cudagraphs':False})
 
@@ -233,6 +244,7 @@ class MixedSolver(nn.Module):
 
     def _forward_with_execution_settings(self,scene,start,dt,*,learned=True,force=None,torque=None):
         self._elastic_shape_supervision_terms=[]
+        self._shared_material_supervision_terms=[]
         if self.config.get('inference_kinematics_cache',False) and not torch.is_grad_enabled():
             from .inference_kinematics import StepKinematics
             with StepKinematics() as cache:
@@ -250,14 +262,17 @@ class MixedSolver(nn.Module):
 
     def _step_with_velocity(self,scene,start,dt,learned,force,torque):
         shared_velocity=bool(self.config.get('shared_terminal_velocity',False))
-        if shared_velocity:self.protected_response.last_latent=None
+        shared_features=shared_velocity or self.shared_material_head is not None
+        if shared_features:self.protected_response.last_latent=None
         result, diagnostic = self._forward_step(scene,start,dt,learned=learned,force=force,torque=torque)
         if self.training and self._elastic_shape_supervision_terms:
             diagnostic['elastic_shape_supervision']=torch.stack(self._elastic_shape_supervision_terms).mean()
+        if self.training and self._shared_material_supervision_terms:
+            diagnostic['shared_material_supervision']=torch.stack(self._shared_material_supervision_terms).mean()
         if learned and self.terminal_velocity is not None:
             features=self.protected_response.last_latent if shared_velocity else None
             result = self.terminal_velocity(scene,start,result,dt,diagnostic['accepted'],features)
-        if shared_velocity:self.protected_response.last_latent=None
+        if shared_features:self.protected_response.last_latent=None
         return result, diagnostic
 
     def _forward_step(self,scene,start,dt,*,learned=True,force=None,torque=None):

@@ -1,0 +1,139 @@
+{
+  "status": "SIX_FIXED_GPU_TIMELINES_COMPLETED",
+  "checkpoint_sha256": "b73dbd02f92adcf7ee9b82587fa937c967b1d8f165ecb1974d10cc206c4b5c60",
+  "nominal_substeps": 3,
+  "analytic_predictor_rounds": 1,
+  "neural_rounds_per_substep": 1,
+  "scenes": {
+    "franka": {
+      "decoded_frames": 361,
+      "video_seconds": 12.03,
+      "physical_seconds": 4.499999999999986,
+      "complete_video": true,
+      "same_new_weights": true,
+      "all_requested_frames": true,
+      "backbone_calls": 810,
+      "physical_substeps": 810,
+      "analytic_predictor_rounds": 1,
+      "neural_rounds": 1,
+      "inference_device": "cuda:0",
+      "execution_policy": "fused_graph",
+      "reported_inference_fps": 1.0070660185150764,
+      "recorded_wall_seconds": 268.1055611409829
+    },
+    "cloth": {
+      "decoded_frames": 214,
+      "video_seconds": 7.13,
+      "physical_seconds": 2.7999999999999914,
+      "complete_video": true,
+      "same_new_weights": true,
+      "all_requested_frames": true,
+      "backbone_calls": 504,
+      "physical_substeps": 504,
+      "analytic_predictor_rounds": 1,
+      "neural_rounds": 1,
+      "inference_device": "cuda:0",
+      "execution_policy": "fused_graph",
+      "reported_inference_fps": 0.9753361551789713,
+      "recorded_wall_seconds": 172.2483054769691
+    },
+    "w1": {
+      "decoded_frames": 623,
+      "video_seconds": 20.76,
+      "physical_seconds": 4.799999999999985,
+      "complete_video": true,
+      "same_new_weights": true,
+      "all_requested_frames": true,
+      "backbone_calls": 878,
+      "physical_substeps": 878,
+      "analytic_predictor_rounds": 1,
+      "neural_rounds": 1,
+      "inference_device": "cuda:0",
+      "execution_policy": "fused_graph",
+      "reported_inference_fps": 0.8958361022078368,
+      "recorded_wall_seconds": 321.48737842804985
+    },
+    "piper": {
+      "decoded_frames": 358,
+      "video_seconds": 11.93,
+      "physical_seconds": 5.199999999999983,
+      "complete_video": true,
+      "same_new_weights": true,
+      "all_requested_frames": true,
+      "backbone_calls": 936,
+      "physical_substeps": 936,
+      "analytic_predictor_rounds": 1,
+      "neural_rounds": 1,
+      "inference_device": "cuda:0",
+      "execution_policy": "reference",
+      "reported_inference_fps": 0.831830478717955,
+      "recorded_wall_seconds": 375.07642239902634
+    },
+    "w1_dual": {
+      "decoded_frames": 407,
+      "video_seconds": 13.56,
+      "physical_seconds": 3.0,
+      "complete_video": true,
+      "same_new_weights": true,
+      "all_requested_frames": true,
+      "backbone_calls": 540,
+      "physical_substeps": 540,
+      "analytic_predictor_rounds": 1,
+      "neural_rounds": 1,
+      "inference_device": "cuda:0",
+      "execution_policy": "reference",
+      "reported_inference_fps": 0.7103361850788829,
+      "recorded_wall_seconds": 253.4011412920081
+    },
+    "franka_rigid_cloth": {
+      "decoded_frames": 475,
+      "video_seconds": 15.83,
+      "physical_seconds": 6.399999999999979,
+      "complete_video": true,
+      "same_new_weights": true,
+      "all_requested_frames": true,
+      "backbone_calls": 1152,
+      "physical_substeps": 1152,
+      "analytic_predictor_rounds": 1,
+      "neural_rounds": 1,
+      "inference_device": "cuda:0",
+      "execution_policy": "reference",
+      "reported_inference_fps": 0.7070238202638119,
+      "recorded_wall_seconds": 543.121729416016
+    }
+  },
+  "additional_scene_task_checks": {
+    "piper": {
+      "status": "PASS",
+      "checks": null
+    },
+    "w1_dual": {
+      "status": "PASS",
+      "checks": null
+    },
+    "franka_rigid_cloth": {
+      "status": "PASS",
+      "checks": {
+        "lifted": true,
+        "transferred": true,
+        "cloth_support": true,
+        "bounded_support_overlap": true,
+        "finite_cloth_area": true,
+        "cloth_pins_preserved": true,
+        "robot_cloth_overlap_bounded": true,
+        "payload_cloth_overlap_bounded": true,
+        "rigid_overlap_bounded": true
+      }
+    }
+  },
+  "piper_material_quality": {
+    "minimum_tet_volume_ratio": 0.04290994071356177,
+    "uniform_volume_quality_pass": false
+  },
+  "notes": [
+    "All videos decoded to the full renderer-reported frame count",
+    "Task checks differ between scenes; Piper local compression needs correction",
+    "Three earlier recordings reused byte-identically under the same selected checkpoint",
+    "Videos, temporary logs and datasets are not committed"
+  ]
+}

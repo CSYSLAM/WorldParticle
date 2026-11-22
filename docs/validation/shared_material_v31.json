@@ -1,0 +1,235 @@
+{
+  "status": "PASS_THREE_TASKS_PHASE_I_ONLY",
+  "training": {
+    "phase": "frozen_backbone_shared_latent_material_distillation",
+    "samples": 1096,
+    "training_samples": 877,
+    "validation_samples": 219,
+    "validation_scope": "Held-out contiguous blocks within the same full trajectories; NOT unseen assets or materials",
+    "trainable_parameters": 253400,
+    "backbone_updated": false,
+    "completed_updates": 320,
+    "best_update": 220,
+    "stop_reason": "development_loss_plateau",
+    "initial_validation": {
+      "loss": 0.9918069547061981,
+      "relative_squared_displacement_error": 1.0,
+      "target_normalized_squared_displacement": 157.31579485036613,
+      "mean_normalized_error": 0.7183369627870599
+    },
+    "final_validation": {
+      "loss": 0.47383793981177624,
+      "relative_squared_displacement_error": 0.3530680882957509,
+      "target_normalized_squared_displacement": 157.31579485036613,
+      "mean_normalized_error": 0.2536218582034032
+    },
+    "final_per_scene": {
+      "cloth": {
+        "loss": 0.5000110609666002,
+        "relative_squared_displacement_error": 0.4768381472881459,
+        "target_normalized_squared_displacement": 21.042749103927594,
+        "mean_normalized_error": 0.20067970993132253
+      },
+      "franka": {
+        "loss": 0.45048357768543795,
+        "relative_squared_displacement_error": 0.3605619812310111,
+        "target_normalized_squared_displacement": 71.90817623978872,
+        "mean_normalized_error": 0.3240919311465867
+      },
+      "w1": {
+        "loss": 0.48012662422038155,
+        "relative_squared_displacement_error": 0.3042319064474937,
+        "target_normalized_squared_displacement": 64.36486950664984,
+        "mean_normalized_error": 0.22002075233991275
+      }
+    },
+    "checkpoint_sha256": "a333e6683a43ade31aa209cb98ec25da82ca26f2ead589a46a5d6c9abb0d4973"
+  },
+  "tasks": {
+    "franka": {
+      "status": "PASS_TASK",
+      "frames": 270,
+      "neural_calls": 810,
+      "physical_steps": 810,
+      "wall_seconds": 217.6010112990043,
+      "recorded_loop_fps": 1.2408030568800736,
+      "checks": {
+        "material_head_enabled": true,
+        "one_learned_material_call_per_step": true,
+        "two_remaining_analytic_material_solves_per_step": true,
+        "complete": true,
+        "same_weights": true,
+        "no_native_dynamics": true,
+        "no_teacher": true,
+        "no_optimizer": true,
+        "one_neural_call_per_step": true,
+        "no_retries": true,
+        "all_auditors_exit_zero": true,
+        "whole_block_clear_5mm": true,
+        "sustained_250ms": true,
+        "volume_safe": true,
+        "overlap_below_4mm": true
+      },
+      "material_correction": {
+        "enabled": true,
+        "learned_final_stage_calls": 810,
+        "analytic_reduced_solves": 1620
+      },
+      "baseline_analytic_solve_count_for_same_steps": 2430,
+      "baseline_count_scope": "Derived three baseline material solves per physical step for the single-material test scenes; independent baseline tapes retained."
+    },
+    "cloth": {
+      "status": "PASS_TASK",
+      "frames": 168,
+      "neural_calls": 504,
+      "physical_steps": 504,
+      "wall_seconds": 146.6837464660057,
+      "recorded_loop_fps": 1.145321169165354,
+      "checks": {
+        "material_head_enabled": true,
+        "one_learned_material_call_per_step": true,
+        "two_remaining_analytic_material_solves_per_step": true,
+        "complete": true,
+        "same_weights": true,
+        "no_native_dynamics": true,
+        "no_teacher": true,
+        "no_optimizer": true,
+        "one_neural_call_per_step": true,
+        "no_retries": true,
+        "all_auditors_exit_zero": true,
+        "original_task_audit_passed": true
+      },
+      "material_correction": {
+        "enabled": true,
+        "learned_final_stage_calls": 504,
+        "analytic_reduced_solves": 1008
+      },
+      "baseline_analytic_solve_count_for_same_steps": 1512,
+      "baseline_count_scope": "Derived three baseline material solves per physical step for the single-material test scenes; independent baseline tapes retained."
+    },
+    "w1": {
+      "status": "PASS_TASK",
+      "frames": 288,
+      "neural_calls": 877,
+      "physical_steps": 877,
+      "wall_seconds": 272.2187277980265,
+      "recorded_loop_fps": 1.0579727645104655,
+      "checks": {
+        "material_head_enabled": true,
+        "one_learned_material_call_per_step": true,
+        "two_remaining_analytic_material_solves_per_step": true,
+        "complete": true,
+        "same_weights": true,
+        "no_native_dynamics": true,
+        "no_teacher": true,
+        "no_optimizer": true,
+        "one_neural_call_per_step": true,
+        "no_retries": true,
+        "all_auditors_exit_zero": true,
+        "original_task_audit_passed": true
+      },
+      "material_correction": {
+        "enabled": true,
+        "learned_final_stage_calls": 877,
+        "analytic_reduced_solves": 1754
+      },
+      "baseline_analytic_solve_count_for_same_steps": 2631,
+      "baseline_count_scope": "Derived three baseline material solves per physical step for the single-material test scenes; independent baseline tapes retained."
+    }
+  },
+  "module_benchmark": {
+    "status": "COMPLETE_MODULE_DIAGNOSTIC",
+    "samples": [
+      {
+        "repeat": 0,
+        "method": "analytic",
+        "seconds": 0.003791410999838263
+      },
+      {
+        "repeat": 0,
+        "method": "learned",
+        "seconds": 0.0033478119876235723
+      },
+      {
+        "repeat": 1,
+        "method": "learned",
+        "seconds": 0.003178386017680168
+      },
+      {
+        "repeat": 1,
+        "method": "analytic",
+        "seconds": 0.0035309750237502158
+      },
+      {
+        "repeat": 2,
+        "method": "analytic",
+        "seconds": 0.003427481045946479
+      },
+      {
+        "repeat": 2,
+        "method": "learned",
+        "seconds": 0.0030267430120147765
+      },
+      {
+        "repeat": 3,
+        "method": "learned",
+        "seconds": 0.002941894985269755
+      },
+      {
+        "repeat": 3,
+        "method": "analytic",
+        "seconds": 0.003447477996814996
+      },
+      {
+        "repeat": 4,
+        "method": "analytic",
+        "seconds": 0.003414627048186958
+      },
+      {
+        "repeat": 4,
+        "method": "learned",
+        "seconds": 0.003011064021848142
+      },
+      {
+        "repeat": 5,
+        "method": "learned",
+        "seconds": 0.0028593899914994836
+      },
+      {
+        "repeat": 5,
+        "method": "analytic",
+        "seconds": 0.003379492030944675
+      },
+      {
+        "repeat": 6,
+        "method": "analytic",
+        "seconds": 0.003356638946570456
+      },
+      {
+        "repeat": 6,
+        "method": "learned",
+        "seconds": 0.0028493909630924463
+      }
+    ],
+    "median_seconds": {
+      "analytic": 0.003427481045946479,
+      "learned": 0.003011064021848142
+    },
+    "latency_reduction_percent": 12.149360376210206,
+    "relative_squared_correction_error": 1.7464194830502184,
+    "maximum_update_difference_m_or_rad": 4.8337558206856335e-08,
+    "same_state_latent_weights_physical_metric": true,
+    "additional_backbone_calls": 0,
+    "scope": "One held Franka state; warmed interleaved module latency only, not full-frame or full-task speedup. Driver timing includes diagnostic probes and is not an inference FPS result."
+  },
+  "limitations": [
+    "Parent trunk frozen; only 253400 readout parameters trained.",
+    "Development blocks and complete tasks reuse the same three assets/material settings; no unseen-asset generalization claim.",
+    "A2+N1 retained; main physical assembly count remains nine per output frame.",
+    "Only final neural-stage material solve replaced, not constitutive law, all coarse solves, collision or constraints.",
+    "Microbenchmark is one held state, not end-to-end speedup.",
+    "Held-state module relative squared error exceeded the zero-correction baseline while max absolute update difference was below 0.05 micrometres.",
+    "No rollout study omitting final correction altogether; necessity of the new head over that cheaper alternative is not established.",
+    "Default weights remain the published v24 checkpoint; v31 requires explicit recipe."
+  ]
+}

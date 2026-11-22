@@ -513,12 +513,32 @@ def protected_update(model, scene, state, metric, raw_coarse, residual, whitenin
                 torch.where(complete[:,None,None],0.,complementary_part[:,ids]))
     update = protected_part + complementary_part
     if model.config.get('analytic_elastic_postsolve',False):
-        from .analytic_material_response import correct
-        update,material_valid=correct(scene,state,metric,coarse,source,update,
-            maximum_columns=int(model.config.get('analytic_material_maximum_columns',96)),
-            maximum_nodes=int(model.config.get('analytic_material_maximum_nodes',4096)),
-            blocked=bool(model.config.get('analytic_material_block_solve',False)))
-        model._analytic_material_total_solves=getattr(model,'_analytic_material_total_solves',0)+scene._analytic_material_last_solves
+        head=getattr(model,'shared_material_head',None)
+        scoped_analytic=(head is not None and model.config.get('shared_material_analytic_other_contracts',False)
+            and scene.metadata.get('contract')!='elastic_surface_joint_contact_v38')
+        if learned and model.config.get('omit_final_material_correction',False):
+            material_valid=torch.ones_like(valid)
+            model._omitted_material_calls=getattr(model,'_omitted_material_calls',0)+1
+        elif learned and head is not None and not scoped_analytic and model.config.get('shared_material_use_learned',True):
+            proposal=update
+            update,material_valid=head.correct(scene,state,metric,coarse,source,update,w,baseline,
+                model.protected_response.last_latent,dt)
+            model._shared_material_calls=getattr(model,'_shared_material_calls',0)+1
+            if model.training and torch.is_grad_enabled() and model.config.get('shared_material_supervision_weight',0)>0:
+                from .shared_material_correction import teacher_loss
+                model._shared_material_supervision_terms.append(teacher_loss(
+                    model,scene,state,metric,coarse,source,proposal,update))
+        else:
+            if learned and scoped_analytic:
+                model._scoped_analytic_material_calls=getattr(model,'_scoped_analytic_material_calls',0)+1
+            from .analytic_material_response import correct
+            recorder=getattr(model,'material_correction_recorder',None) if learned else None
+            observer=None if recorder is None else recorder.observer(model,scene,state,metric,coarse,source,update,w,baseline,dt)
+            update,material_valid=correct(scene,state,metric,coarse,source,update,
+                maximum_columns=int(model.config.get('analytic_material_maximum_columns',96)),
+                maximum_nodes=int(model.config.get('analytic_material_maximum_nodes',4096)),
+                blocked=bool(model.config.get('analytic_material_block_solve',False)),observer=observer)
+            model._analytic_material_total_solves=getattr(model,'_analytic_material_total_solves',0)+scene._analytic_material_last_solves
         valid=valid&material_valid
     if return_parts:
         return update.to(residual.dtype), coarse_r.to(residual.dtype), coarse.valid & valid, protected_part.to(residual.dtype)

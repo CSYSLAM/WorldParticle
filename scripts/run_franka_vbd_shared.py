@@ -34,6 +34,9 @@ def main():
     p.add_argument('--substeps', type=int, help='Defaults to 3 for model inference, 10 for the offline VBD reference')
     p.add_argument('--request-dt',type=float,help='Model-only single physical step per output frame, e.g. 1/60 or 1/30 as a decimal')
     p.add_argument('--disable-learning',action='store_true',help='Use the same physical-round budget with learned responses disabled')
+    p.add_argument('--shared-material-correction',action=argparse.BooleanOptionalAction,default=None,
+                   help='Override trained v31 material head only; original shared response remains enabled')
+    p.add_argument('--omit-final-material-correction',action='store_true',help='Ablation: omit only the final learned-stage material correction')
     p.add_argument('--contact-aware-warm-start',action=argparse.BooleanOptionalAction,default=True,
                    help='Keep the initial free-flight candidate from closing static particle contacts; inertial targets are unchanged')
     p.add_argument('--analytic-elastic-postsolve',action=argparse.BooleanOptionalAction,default=None,
@@ -235,6 +238,8 @@ def main():
         if a.mimic_metric_tangent is not None:runtime_config['mimic_metric_tangent']=a.mimic_metric_tangent
         runtime_config['contact_aware_warm_start']=a.contact_aware_warm_start
         from wp_vbd.inference_policy import configure
+        from wp_vbd.shared_material_correction import apply_override
+        apply_override(runtime_config,a.shared_material_correction,omit=a.omit_final_material_correction)
         runtime_config=configure(runtime_config,a.execution_policy)
         network = MixedSolver(runtime_config).to(a.device).eval()
         missing,unexpected=network.load_state_dict(stored['model'],strict=False)
@@ -586,6 +591,8 @@ def main():
                 out['scope']='Authored FR3/free rigid/cloth scene. Shared network and physical response on the selected device; IK controls robot drives only. No payload attachment or teacher trajectory.'
             out.update(actual_tool_position=point.tolist(),commanded_tool_position=target.tolist(),
                        tool_position_error_m=float(np.linalg.norm(point-target)))
+        from wp_vbd.shared_material_correction import statistics as material_statistics
+        out['material_correction']=material_statistics(network)
         temporary=report_path.with_suffix('.tmp')
         from wp_vbd.diagnostic_io import to_plain
         temporary.write_text(json.dumps(to_plain(out),indent=2,default=str)+'\n')

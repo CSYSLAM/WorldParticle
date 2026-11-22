@@ -67,7 +67,7 @@ class HierarchicalVectorResponse(VectorInverseResponse):
 
     def encode(self,scene,state,physical,baseline,relation,dt):
         latent,features=self._encode_neural(scene,state,physical,baseline,relation,dt)
-        if getattr(self,'shared_velocity_features',False):self.last_latent=latent
+        if getattr(self,'shared_velocity_features',False) or getattr(self,'shared_material_features',False):self.last_latent=latent
         return latent,features
 
     def _encode_neural(self,scene,state,physical,baseline,relation,dt):

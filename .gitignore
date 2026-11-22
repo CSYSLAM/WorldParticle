@@ -85,6 +85,7 @@ imgui.ini
 
 # Verified current model chunks are the only binary checkpoint payload in Git.
 !model_releases/shared_vbd_v24_cloth40/model.pt.part*
+!model_releases/shared_vbd_v32_a1/model.pt.part*
 .env
 .env.*
 !.env.example

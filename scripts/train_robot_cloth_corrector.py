@@ -32,10 +32,15 @@ def main():
     p.add_argument('--validation-hops',type=int,default=18)
     p.add_argument('--patience',type=int,default=3)
     p.add_argument('--learning-rate',type=float,default=1e-5)
+    p.add_argument('--analytic-predictor-rounds',type=int,choices=(1,2),default=2)
+    p.add_argument('--material-supervision-weight',type=float,default=0.,
+                   help='Training-only analytic labels at current predicted states; requires a trained material head')
+    p.add_argument('--freeze-terminal-velocity',action='store_true',help='Keep endpoint velocity readout fixed during material/prefix experiments')
     p.add_argument('--gpu-memory-gib',type=float,default=16.)
     p.add_argument('--preflight',action='store_true')
     a=p.parse_args()
     if min(a.hops,a.truncate,a.validation_hops,a.validation_interval,a.patience,a.updates)<1:p.error('Positive budgets required')
+    if not math.isfinite(a.material_supervision_weight) or a.material_supervision_weight<0:p.error('Nonnegative finite supervision weight required')
     a.output.mkdir(parents=True,exist_ok=False)
     from wp_vbd.newton_source import activate_newton_source,newton_revision
     activate_newton_source()
@@ -77,11 +82,19 @@ def main():
             robot_replay=[r for r in json.loads(a.replay_manifest.read_text())['scenes'] if r['loader']=='surface' and 'franka' in r.get('dataset_id','')]
     saved=torch.load(a.checkpoint,map_location='cpu',weights_only=True)
     config=dict(saved.get('model_config') or saved['config']['model'])
-    config.update(analytic_predictor_rounds=2,unroll=1,rod_unroll=1,
+    config.update(analytic_predictor_rounds=a.analytic_predictor_rounds,unroll=1,rod_unroll=1,
         mimic_metric_tangent=True,contact_aware_warm_start=True,periodic_bending=True)
+    if config.get('shared_material_correction',False):
+        config.update(shared_material_supervision_weight=a.material_supervision_weight,
+            shared_material_analytic_other_contracts=True,omit_final_material_correction=False,
+            shared_material_use_learned=True)
+    elif a.material_supervision_weight:
+        raise ValueError('Material supervision requires a trained shared material head checkpoint')
     model=MixedSolver(config).to(a.device);model.load_state_dict(saved['model'],strict=True)
     del saved
-    for name,param in model.named_parameters():param.requires_grad_(name.startswith(('protected_response.','terminal_velocity.')))
+    for name,param in model.named_parameters():param.requires_grad_(name.startswith(('protected_response.','terminal_velocity.','shared_material_head.')))
+    if a.freeze_terminal_velocity and model.terminal_velocity is not None:
+        model.terminal_velocity.requires_grad_(False)
     model.step_saved_tensors_on_cpu=False;model.protected_response.checkpoint_inputs_on_cpu=False
     parameters=[param for param in model.parameters() if param.requires_grad]
     optimizer=torch.optim.AdamW(parameters,lr=a.learning_rate,weight_decay=1e-6)
@@ -128,6 +141,9 @@ def main():
             if rounds!=1:raise AssertionError('Exactly one backbone call per student step required')
             nn+=rounds;target=select(states,slice(j+stride,j+stride+1))
             value,terms,metrics=objective(current,target,info)
+            if training and 'shared_material_supervision' in info:
+                value=value+a.material_supervision_weight*info['shared_material_supervision']
+                metrics['shared_material_supervision']=info['shared_material_supervision']
             if not bool(torch.isfinite(value)):raise ValueError('Nonfinite supervised objective')
             loss+=float(value.detach())/hops;chunk.append(value*weight/hops)
             last_metrics={k:float(v.detach()) for k,v in metrics.items()}
@@ -143,11 +159,17 @@ def main():
             'newton_sha':newton_revision(),'model_config':config,'completed_updates':0,
             'trainable_parameters':sum(param.numel() for param in parameters),
             'training':[],'validation':[],'native_solver_calls_in_training':0,
-            'budget':'3 substeps/frame, 2 analytic predictors + 1 neural correction; no adaptive extra NN calls in training',
+            'budget':f'3 substeps/frame, {a.analytic_predictor_rounds} analytic predictors + 1 neural correction; no adaptive extra NN calls in training',
+            'material_supervision_weight':a.material_supervision_weight,
+            'terminal_velocity_frozen':a.freeze_terminal_velocity,
+            'material_head_scope':'surface/joint v38; other replay contracts explicitly retain analytic material correction',
+            'collection_manifest_sha256':hashlib.sha256(a.collection.read_bytes()).hexdigest(),
             'gradient_horizon':a.truncate,'autonomous_horizon':a.hops,
             'targeted_training_trajectories':len(train),'targeted_development_trajectories':len(dev),
             'replay_robot_trajectories':len(robot_replay),'teacher_manifest_sha256':hashlib.sha256(a.manifest.read_bytes()).hexdigest()}
     def write():
+        from wp_vbd.shared_material_correction import statistics
+        report['material_correction']=statistics(model)
         report['gpu']=budget.report();tmp=a.output/'training.tmp'
         tmp.write_text(json.dumps(report,indent=2)+'\n');tmp.replace(a.output/'training.json')
     def validate(update):
@@ -170,6 +192,10 @@ def main():
     def save(update,name):
         atomic_save({'model':model.state_dict(),'model_config':config,'step':update,
                      'architecture':model.architecture_id,'training_summary':report},a.output/name)
+        atomic_save({'optimizer':optimizer.state_dict(),'completed_updates':update,
+                     'rng_state':rng.getstate(),'torch_rng_state':torch.get_rng_state(),
+                     'cuda_rng_state':torch.cuda.get_rng_state_all() if a.device.startswith('cuda') else [],
+                     'matching_checkpoint':name,'model_config':config},a.output/(name+'.training_state.pt'))
     try:
         baseline=validate(0);best=baseline['cloth_loss'];stale=0
         for update in range(1,(1 if a.preflight else a.updates)+1):
@@ -195,7 +221,8 @@ def main():
                 details.append(rollout(old,start,2,training=True,weight=.25))
             probes={name:param for name,param in model.named_parameters() if name in (
                 'protected_response.hierarchy.encoder.0.query.weight',
-                'protected_response.coarse_response.readout.weight','terminal_velocity.shared_readout.weight')}
+                'protected_response.coarse_response.readout.weight','terminal_velocity.shared_readout.weight',
+                'shared_material_head.readout.4.weight','shared_material_head.local_readout.weight')}
             gradients={name:float(param.grad.norm()) for name,param in probes.items() if param.grad is not None}
             norm=clip_gradient_norm_fp64(parameters,1.)
             if not math.isfinite(float(norm)) or not gradients or not any(v>0 for v in gradients.values()):raise ValueError('No finite shared gradient')

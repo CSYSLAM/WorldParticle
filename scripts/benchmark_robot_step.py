@@ -27,7 +27,8 @@ def main():
     p.add_argument('--repeats',type=int,default=4)
     p.add_argument('--steps',type=int,default=3)
     p.add_argument('--frame-loop',action='store_true',help='Franka held frames: include the original IK controller, joint readout and in-memory frame recording')
-    p.add_argument('--variants',nargs='+',choices=('reference','cache','assembly','cache_assembly','compiled','fused','fused_search','reference_atomic','fused_atomic','reference_no_fill','fused_no_fill','fused_fast','fused_fast_legacy_plan','fused_device','fused_device_uncached_topology','fused_device_native_products','fused_graph','fused_graph_legacy'),
+    p.add_argument('--material-ablation',action='store_true',help='Algorithm comparison: reference=A2 learned, all variants use fused_graph; numerical equivalence is diagnostic only')
+    p.add_argument('--variants',nargs='+',choices=('reference','cache','assembly','cache_assembly','compiled','fused','fused_search','reference_atomic','fused_atomic','reference_no_fill','fused_no_fill','fused_fast','fused_fast_legacy_plan','fused_device','fused_device_uncached_topology','fused_device_native_products','fused_graph','fused_graph_legacy','material_analytic','material_omit','prefix_one_learned'),
                    default=['reference','assembly','cache_assembly'])
     p.add_argument('--profile',action='store_true')
     p.add_argument('--scalar-profile',action='store_true',help='Extra CPU operator/stack pass to locate scalar reads and dynamic selections; never used for timing claims')
@@ -42,6 +43,11 @@ def main():
         p.error('--frame-loop requires Franka and a multiple of three physical steps')
     if a.variants[0]!='reference' or len(set(a.variants))!=len(a.variants):
         p.error('Unique variants starting with reference required')
+    material_variants={'reference','material_analytic','material_omit','prefix_one_learned'}
+    if a.material_ablation and not set(a.variants)<=material_variants:
+        p.error('Material ablation requires explicit material/prefix variants')
+    if not a.material_ablation and set(a.variants)&(material_variants-{'reference'}):
+        p.error('Material/prefix variants require --material-ablation')
     if 'fused_fast_legacy_plan' in a.variants and a.baseline_source is None:p.error('Legacy planner requires --baseline-source')
     a.output.mkdir(parents=True,exist_ok=False)
     from wp_vbd.newton_source import activate_newton_source
@@ -114,6 +120,7 @@ def main():
     config['contact_aware_warm_start']=False if a.case=='w1' else True
     if a.case=='w1':config['line_search']=[2.**(-i) for i in range(13)]
     model=MixedSolver(config).cuda().eval();model.load_state_dict(stored['model'],strict=True);del stored
+    if a.material_ablation and model.shared_material_head is None:raise ValueError('Trained material head required for algorithm comparison')
     scene=export_model(e.model,cfg,run['scene'],newton,1/180,'cuda:0')
     scene.metadata.update(detection_motion_budget=.012,bounded_motion_forecast_target_only=True,
         joint_tree_coarse_modes='scalar_tree_twelve_columns_v307',articulation_material_motion_modes=a.case!='w1',
@@ -146,6 +153,12 @@ def main():
     initial_history={k:v.clone() for k,v in initial_history.items()}
     command_targets=[];controller_calls=[0]
     def reset(variant):
+        if a.material_ablation:
+            model.config.update(analytic_predictor_rounds=1 if variant=='prefix_one_learned' else 2,
+                shared_material_use_learned=variant!='material_analytic',
+                omit_final_material_correction=variant=='material_omit')
+            model._shared_material_calls=0;model._analytic_material_total_solves=0;model._omitted_material_calls=0
+            variant='fused_graph'
         kinematics_requested=variant=='fused_graph'
         model.config['fused_physical_checks']=variant=='fused_graph'
         graph_requested=variant in ('fused_graph','fused_graph_legacy')
@@ -207,6 +220,8 @@ def main():
         (a.output/'benchmark.json').write_text(json.dumps({'status':'RUNNING','case':a.case,'source':str(a.recording.resolve()),
             'weights_sha256':digest,'implementation_sha256':implementation,'environment':environment,
             'steps_per_sample':a.steps,'nominal_substeps':3,'frame_loop':a.frame_loop,
+            'algorithmic_material_ablation':a.material_ablation,
+            'quality_scope':'Full-task quality requires separate complete rollout audits' if a.material_ablation else 'Same algorithm execution comparison',
             'controller_cadence':'once_per_three_substeps' if a.frame_loop else 'not_included',
             'samples':rows,'summary':summary,
             'scope':('Interleaved held-state frame loop including original IK controller, native joint readout and in-memory recording. No video rendering, file compression or whole-task FPS claim. '
@@ -238,6 +253,11 @@ def main():
                     reference=values
                 errors={k:float(np.max(abs(v-reference[k]),initial=0.)) for k,v in values.items()}
                 rows.append({'repeat':repeat,'variant':variant,'seconds':elapsed,'neural_calls':hook_calls[0],
+                    'analytic_predictor_rounds':model.config.get('analytic_predictor_rounds'),
+                    'material_omitted':model.config.get('omit_final_material_correction',False),
+                    'material_calls':dict(learned=getattr(model,'_shared_material_calls',0),
+                        analytic=getattr(model,'_analytic_material_total_solves',0),
+                        omitted=getattr(model,'_omitted_material_calls',0)) if a.material_ablation else None,
                     'deterministic_algorithms':torch.are_deterministic_algorithms_enabled(),
                     'fill_uninitialized_memory':torch.utils.deterministic.fill_uninitialized_memory,
                     'physics_fill_uninitialized_memory':model.config.get('inference_fill_uninitialized_memory'),
@@ -260,8 +280,17 @@ def main():
         'no_retries':all(r['retries']==0 for r in rows),
         'short_window_numerically_equivalent':all(all(error<=(1e-6 if key.endswith('qd') else 1e-8)
             for key,error in r['errors_vs_reference'].items()) for r in rows)}
+    if a.material_ablation:
+        budgets={'reference':(1,2,0),'material_analytic':(0,3,0),
+                 'material_omit':(0,2,1),'prefix_one_learned':(1,1,0)}
+        checks['correct_material_stage_budgets']=all(
+            tuple(r['material_calls'][key] for key in ('learned','analytic','omitted'))==
+            tuple(a.steps*count for count in budgets[r['variant']]) for r in rows)
     result['checks']=checks
-    if not all(checks.values()):result['status']='FAILED_COMPARISON'
+    required={k:v for k,v in checks.items() if not (a.material_ablation and k=='short_window_numerically_equivalent')}
+    result['required_checks']=required
+    if not all(required.values()):result['status']='FAILED_COMPARISON'
+    elif a.material_ablation:result['status']='COMPLETE_ALGORITHMIC_ABLATION'
     if a.profile or a.nvtx:
         from wp_vbd.execution_profile import ExecutionProfile
         if a.cuda_profiler:torch.cuda.profiler.start()
@@ -301,7 +330,7 @@ def main():
             (a.output/(variant+'_scalar_reads.json')).write_text(json.dumps({
                 'rows':rows,'physical_steps':1,'scope':'Extra one-physical-step CPU operator/stack diagnostic, bounded to reduce profiler memory. Counts identify eager scalar reads, dynamic selections and copies. Profiler overhead invalidates latency claims; _to_copy also includes dtype/device-local copies.'},indent=2)+'\n')
     (a.output/'benchmark.json').write_text(json.dumps(result,indent=2)+'\n')
-    if result['status']!='COMPLETE':raise SystemExit(1)
+    if result['status'] not in ('COMPLETE','COMPLETE_ALGORITHMIC_ABLATION'):raise SystemExit(1)
 
 
 if __name__=='__main__':main()

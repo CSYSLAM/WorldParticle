@@ -30,6 +30,9 @@ def main():
     p.add_argument('--window',action='store_true',help='Display accepted states while inference advances')
     p.add_argument('--disable-learning',action='store_true',
                    help='Matched physical-round ablation; never labeled or rendered as neural inference')
+    p.add_argument('--shared-material-correction',action=argparse.BooleanOptionalAction,default=None)
+    p.add_argument('--omit-final-material-correction',action='store_true',help='Ablation: omit only the final learned-stage material correction')
+    p.add_argument('--analytic-predictor-rounds',type=int,choices=(0,1,2,3),help='Override analytic prefix budget for controlled experiments')
     p.add_argument('--tangent-support-scale', type=float, default=64.)
     p.add_argument('--terminal-velocity', action=argparse.BooleanOptionalAction, default=True,
                    help='Use the frozen endpoint-velocity readout; disable for matched diagnosis')
@@ -141,6 +144,8 @@ def main():
             solver_configuration=configuration,
             scope='Dynamic FR3, free square cloth, frictional single-corner pinch. No pins, attachments, native dynamics, teacher trajectory or cloth pose override. Self-contact is not enabled in this simple drape.',
             failure=failure)
+        from wp_vbd.shared_material_correction import statistics as material_statistics
+        result['material_correction']=material_statistics(network)
         tmp = a.output / 'run.tmp'
         cache=getattr(scene,'_response_index_workspace',None)
         if cache is not None:result['response_index_cache']=cache.report()
@@ -172,6 +177,9 @@ def main():
     config=dict(stored.get('model_config') or stored['config']['model'])
     config.update(mimic_metric_tangent=True, contact_aware_warm_start=True, periodic_bending=True)
     from wp_vbd.inference_policy import configure
+    from wp_vbd.shared_material_correction import apply_override
+    apply_override(config,a.shared_material_correction,omit=a.omit_final_material_correction)
+    if a.analytic_predictor_rounds is not None:config['analytic_predictor_rounds']=a.analytic_predictor_rounds
     config=configure(config,a.execution_policy)
     network=MixedSolver(config).to(device).eval()
     network.load_state_dict(stored['model'], strict=True)

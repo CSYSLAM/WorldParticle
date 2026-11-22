@@ -1,0 +1,96 @@
+{
+  "schema": "wp_shared_model_snapshot_v2",
+  "architecture": "shared_material_corrector_v31",
+  "model_class": "wp_vbd.mixed_solver.MixedSolver",
+  "active_neural_parameters": 47137509,
+  "active_parameter_prefixes": [
+    "protected_response.",
+    "terminal_velocity.",
+    "shared_material_head."
+  ],
+  "checkpoint": {
+    "file": "model.pt",
+    "bytes": 189205123,
+    "sha256": "b73dbd02f92adcf7ee9b82587fa937c967b1d8f165ecb1974d10cc206c4b5c60",
+    "step": 64,
+    "format": "torch.save inference checkpoint with configuration and training summary",
+    "optimizer_included": false,
+    "rng_included": false
+  },
+  "model_config_file": "model_config.json",
+  "snapshot_tag": "shared-vbd-v32-a1-20261121",
+  "source_branch": "research/shared-vbd-v32-20261121",
+  "environment": {
+    "newton_commit": "25298aea1691e060c86f95e8d2b773c898c006d3",
+    "python": "3.12",
+    "torch": "2.7.1+cu128",
+    "warp": "1.17.0"
+  },
+  "training": {
+    "status": "COMPLETE_TRAINING_FIXED_GPU_TASKS_VALIDATED",
+    "updates": 64,
+    "selected_update": 64,
+    "stop_reason": "Reached the 64-update experiment budget; development loss was still improving, not a demonstrated plateau",
+    "initial_development_loss": 0.7603960421342757,
+    "selected_development_loss": 0.6186542957960359,
+    "initial_replay_loss": 0.591388428578917,
+    "selected_replay_loss": 0.5844219196056891,
+    "unique_training_trajectories": 72,
+    "training_coverage": {
+      "robot_cloth": 6,
+      "augmentation": 64,
+      "robot_replay": 2
+    },
+    "trainable_parameters": 47136211,
+    "observed_gpu_process_peak_mib": 4324.0
+  },
+  "qualification": "SIX_FIXED_GPU_TASKS_SCENE_SPECIFIC_CHECKS_PASS_MATERIAL_QUALITY_LIMITED",
+  "limitations": [
+    "Six fixed authored scenes completed; scene-specific task checks are not a uniform material-quality certificate",
+    "Piper minimum local tet volume ratio is 0.04291 despite task completion",
+    "Fine-tuning used 72 trajectories; no full 42-demo or unseen-asset recertification",
+    "64 updates exhausted the experiment budget while development loss was improving; no plateau claim",
+    "Inference snapshot excludes optimizer and RNG; the paired state remains local, and exact training resume has not been validated",
+    "Assets and teacher datasets remain external; raw training reproduction is not provided by weights alone",
+    "Nominal dt unchanged, explicit contact/constraint/physical computation remains; not realtime"
+  ],
+  "download": {
+    "storage": "ordinary_git_parts_with_source",
+    "branch": "research/shared-vbd-v32-20261121",
+    "base_url": "https://raw.githubusercontent.com/CSYSLAM/WorldParticle/shared-vbd-v32-a1-20261121/model_releases/shared_vbd_v32_a1",
+    "parts": [
+      {
+        "file": "model.pt.part000",
+        "bytes": 33554432,
+        "sha256": "38b69d12c80412c8281eb4f17f3a06bacc657d9e8a6af4cb42288a608502a76b"
+      },
+      {
+        "file": "model.pt.part001",
+        "bytes": 33554432,
+        "sha256": "fe260cb15ae610ef190c383ed7d25ab3d042bcc94a55b3cd6830359efb98ebed"
+      },
+      {
+        "file": "model.pt.part002",
+        "bytes": 33554432,
+        "sha256": "96bf6450a20a4ac15164d9065bb6b3e0f450fcd7b8a95724a2b1eb62009be7b1"
+      },
+      {
+        "file": "model.pt.part003",
+        "bytes": 33554432,
+        "sha256": "5a0adfb4de4a5a66c20526c08f4dc21a4a85ef12bd2e1a7967768e6172f61902"
+      },
+      {
+        "file": "model.pt.part004",
+        "bytes": 33554432,
+        "sha256": "51bf7185074dfb1944070ef8c3c26d3bca8ab01ca8d39d151befc9bf880bdd79"
+      },
+      {
+        "file": "model.pt.part005",
+        "bytes": 21432963,
+        "sha256": "1ba3aa01ffdf4cf6cfa53d539624299051610c166fb7634b1cb035ed32df11ed"
+      }
+    ]
+  },
+  "source_checksum_file": "source_sha256.json",
+  "total_stored_neural_parameters": 47246841
+}

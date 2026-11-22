@@ -72,6 +72,10 @@ def main():
         e.state_0.particle_q.assign(particles[index]);e.state_0.body_q.assign(bodies[index])
         canvas=Image.new('RGB',(1920,900),(18,28,45));draw=ImageDraw.Draw(canvas)
         title='Franka cloth / GEOMETRY PREVIEW ONLY' if preview else f'Franka cloth | shared model s{run["checkpoint_step"]} | {run["device"]} | A{run["analytic_predictor_rounds"]}+N{run["model_unroll"]}'
+        material=run.get('material_correction',{})
+        if not preview and material:
+            mode='omitted' if material.get('omitted_final_stage_calls',0) else 'learned' if material.get('enabled') else 'analytic'
+            title+=f' | final material: {mode}'
         draw.text((20,15),title,font=font,fill='white')
         for j,(position,target,label) in enumerate(cameras):
             viewer.set_camera(wp.vec3(*position));viewer.camera.look_at(np.array(target))

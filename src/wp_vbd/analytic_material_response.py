@@ -27,7 +27,7 @@ def reduced_correction(columns,images,residual,*,rank_relative=1e-10):
 
 
 def correct(scene,state,metric,coarse,residual,update,*,maximum_columns=96,
-            maximum_nodes=4096,blocked=False):
+            maximum_nodes=4096,blocked=False,observer=None):
     """One reduced solve per interacting component, after neural proposal."""
     if maximum_columns<24 or maximum_columns>192:
         raise ValueError('Material correction needs a bounded 24..192 column budget')
@@ -60,6 +60,8 @@ def correct(scene,state,metric,coarse,residual,update,*,maximum_columns=96,
             # coupling in the same quadratic. No extra object is discarded.
             effective=residual.double()+metric_action(metric,corrected)
             value,good=reduced_correction(columns[:,component],images[:,component],effective[:,component])
+            if observer is not None:
+                observer(component,objects[offset:offset+per_block],effective,value,good)
             scene._analytic_material_last_solves+=1
             corrected=corrected.index_add(1,component,value);valid=valid&good
     return corrected.to(update.dtype),valid

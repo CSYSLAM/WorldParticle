@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "observer_preserves_teacher_exactly": true,
+  "independent_mass_metric_oracle_relative_error": 0.0,
+  "zero_initialization_preserves_proposal": true,
+  "runtime_metric_action_columns": [
+    1,
+    1
+  ],
+  "no_runtime_material_gram_or_reduced_solve": true,
+  "fixed_and_rotational_particle_dofs_preserved": true,
+  "on_policy_teacher_exact_at_target": true,
+  "on_policy_teacher_gradient_nonzero": true,
+  "teacher_eval_forbidden": true,
+  "teacher_counter_isolated_from_inference": true,
+  "material_geometric_basis_frozen_but_shared_features_differentiable": true,
+  "coarse_orthogonality_error": 5.662944647987032e-19,
+  "shared_latent_gradient_nonzero": true,
+  "world_rotation_translation_covariance_error": 2.3852447794681098e-18,
+  "native_solver_calls": 0
+}

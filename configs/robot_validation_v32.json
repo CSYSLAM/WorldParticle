@@ -1,0 +1,133 @@
+{
+  "schema": "shared_vbd_v32_six_demo_render",
+  "checkpoint": "model_releases/shared_vbd_v32_a1/model.pt",
+  "checkpoint_sha256": "b73dbd02f92adcf7ee9b82587fa937c967b1d8f165ecb1974d10cc206c4b5c60",
+  "newton_root": ".local/newton_pinned_25298",
+  "newton_sha": "25298aea1691e060c86f95e8d2b773c898c006d3",
+  "scenes": {
+    "franka": {
+      "runner": "scripts/run_franka_vbd_shared.py",
+      "arguments": [
+        "--frames",
+        "270",
+        "--substeps",
+        "3",
+        "--arm-drive-ke",
+        "20000",
+        "--grasp-x",
+        "0",
+        "--grasp-yaw",
+        "-0.7853981633974483",
+        "--grip-closed",
+        ".024",
+        "--grasp-height",
+        ".21",
+        "--motion-budget",
+        ".012",
+        "--material-motion-modes",
+        "--articulation-modes",
+        "--force-aware-anticipation",
+        "--tangent-support-scale",
+        "8",
+        "--compact-diagnostics",
+        "--gpu-memory-gib",
+        "16",
+        "--mimic-metric-tangent",
+        "--surface-tangent-history",
+        "--native-mimic-roundoff-repair",
+        "--contact-aware-warm-start"
+      ],
+      "renderer": "scripts/render_franka_model_video.py",
+      "scope": "Grasp, lift and hold; release is not covered by this new-weight regression."
+    },
+    "w1": {
+      "runner": "scripts/run_w1_bag.py",
+      "arguments": [
+        "--frames",
+        "288",
+        "--substeps",
+        "3",
+        "--motion-budget",
+        ".012",
+        "--friction",
+        "2.5",
+        "--bag-profile",
+        "flexible",
+        "--bag-grip",
+        "oblique",
+        "--soft-tangent-support-scale",
+        "512",
+        "--elastic-shape-response",
+        "--analytic-elastic-shape-response",
+        "--mimic-metric-tangent",
+        "--surface-tangent-history",
+        "--periodic-bending",
+        "--no-contact-aware-warm-start"
+      ],
+      "renderer": "scripts/render_w1_bag.py",
+      "scope": "Original flexible/oblique bag task, with the original warm-start policy explicitly retained."
+    },
+    "cloth": {
+      "runner": "scripts/run_franka_cloth_corner.py",
+      "arguments": [
+        "--frames",
+        "168",
+        "--substeps",
+        "3",
+        "--grasp-style",
+        "overhead",
+        "--fold-profile",
+        "edge"
+      ],
+      "renderer": "scripts/render_franka_cloth_corner.py"
+    },
+    "piper": {
+      "runner": "scripts/run_piper_soft_place.py",
+      "arguments": [
+        "--frames",
+        "312",
+        "--substeps",
+        "3",
+        "--friction",
+        "2",
+        "--tangent-support-scale",
+        "8"
+      ],
+      "renderer": "scripts/render_piper_soft_place.py",
+      "scope": "Pick a soft block and place it on a free rigid block."
+    },
+    "w1_dual": {
+      "runner": "scripts/run_w1_dual_grasp.py",
+      "arguments": [
+        "--frames",
+        "180",
+        "--substeps",
+        "3",
+        "--style",
+        "side",
+        "--objects",
+        "cylinder_ball",
+        "--friction",
+        "2.5",
+        "--motion-budget",
+        ".012"
+      ],
+      "renderer": "scripts/render_w1_dual_grasp.py",
+      "scope": "Side grasp, lift and retract a rigid cylinder and a soft ball without supports."
+    },
+    "franka_rigid_cloth": {
+      "runner": "scripts/run_franka_rigid_cloth.py",
+      "arguments": [
+        "--frames",
+        "384",
+        "--substeps",
+        "3",
+        "--rigid-tangent-support-scale",
+        "64"
+      ],
+      "renderer": "scripts/render_franka_model_video.py",
+      "scope": "Grasp a free rigid block, transfer and release it onto a deformable cloth."
+    }
+  },
+  "validation_status": "SIX_FIXED_GPU_TASKS_SCENE_SPECIFIC_CHECKS_PASS_MATERIAL_QUALITY_LIMITED"
+}

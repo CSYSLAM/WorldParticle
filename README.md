@@ -4,12 +4,14 @@
 
 当前发布版为 **v24 / cloth fine-tune step40**。同一份权重完成六个机器人任务，名义每帧三子步，每物理步两轮解析预测和一次网络校正。共享特征 648 维、12 头注意力、6 层编码 / 4 层解码，活跃参数 46,884,109。详细结构见 [当前架构](docs/CURRENT_ARCHITECTURE.md)。
 
+本分支还保存最新 **v32 / A1+N1 / step64 研究快照**，复用共享特征学习材料补偿，活跃参数 47,137,509。六项固定 GPU 任务已完成各自检查；Piper 局部单元压缩仍需复核，因此默认稳定入口保持 v24。最新权重与精确参数见 [v32 模型目录](model_releases/shared_vbd_v32_a1/README.md)，实际覆盖与材料质量边界见 [六例扩展验证](docs/v32_six_scene_validation.md)。
+
 ## 模型与环境
 
 [当前模型目录](model_releases/shared_vbd_v24_cloth40/README.md)包含精确配置、校验摘要和六个不超过 32 MiB 的权重分块；与本次源代码一起提交。完整权重 188,146,967 字节，SHA256 `1aac9909419fbb8dda7beef4f0d533050d4ce4191849ebd54ba37dd6a85a2132`。
 
 ```bash
-git clone --single-branch --branch research/shared-vbd-v24-20261120 \
+git clone --depth 1 --single-branch --branch research/shared-vbd-v32-20261121 \
   https://github.com/CSYSLAM/WorldParticle.git
 cd WorldParticle
 # 在已准备好的 Python / Torch / Warp 环境中执行
@@ -17,6 +19,18 @@ python -m pip install -r requirements-vbd-assets.txt
 python scripts/fetch_model_snapshot.py
 python scripts/verify_model_snapshot.py
 ```
+
+恢复并运行最新研究快照（不改变稳定版默认值）：
+
+```bash
+python scripts/fetch_model_snapshot.py --snapshot model_releases/shared_vbd_v32_a1
+python scripts/verify_model_snapshot.py --snapshot model_releases/shared_vbd_v32_a1
+python scripts/run_robot_validation.py --scene cloth --recipe configs/robot_validation_v32.json --window
+python scripts/run_robot_demo_suite.py --recipe configs/robot_validation_v32.json \
+  --output outputs/my_v32_six_demos --parallel-render
+```
+
+v32 检查点为六个不超过 32 MiB 的普通 Git 分块，原始 SHA256 为 `b73dbd02f92adcf7ee9b82587fa937c967b1d8f165ecb1974d10cc206c4b5c60`。本发布提供完整推理权重、配置和训练摘要；配套优化器/RNG 状态保留在原工作区，未重复放入 Git。外部资产和原始训练数据不随权重发布，因此不宣称提供精确训练复现或续跑。
 
 测试环境为 Python 3.12、Torch 2.7.1+cu128、Warp 1.17.0。使用独立 Newton checkout，修订固定为 `25298aea1691e060c86f95e8d2b773c898c006d3`；不要切换用户正在使用的其他 Newton 工作目录。
 
@@ -58,7 +72,7 @@ python scripts/run_robot_demo_suite.py --output outputs/my_robot_suite
 
 最新一轮在图路径合并物理检查与拓扑元数据传输，省去未使用的关系槽位，并接入单步纯运动学缓存。现已默认采用 `auto`：CUDA 的 Franka 软块、单角抓布和 W1 装袋自动选择 `fused_graph`；CPU 和其余三个场景保留 `reference`，显式策略参数优先。同条件七样本短窗对前一版图配置耗时降低约 2.1% / 4.2% / 3.2%（Franka / 抓布 / W1）；Franka 保持段约 2.27 FPS，包含预热的完整计时约 1.19 FPS，仍未实时。实现、测时边界与完整任务结果见 [同步与运动学优化](docs/inference_execution_v30.md) 和 [结果目录](outputs/inference_speed_v30/README.md)。
 
-后续优先评估将材料补偿、重复解析响应与部分近似逆交给共享网络学习；源码审计、GPU 调用计数及分阶段设计见 [可学习物理模块评估](docs/learned_physics_replacement_v31.md)。该方案尚未实现或训练，不属于当前默认推理的能力。
+材料补偿学习已实现并完成两阶段实验：v31 冻结主干训练材料读出头，v32 联合更新主干/材料读出并将解析前缀从两轮降为一轮。64 次更新的开发集目标降低约 18.6%；同状态交错测量帧率约提高 24%，不等于所有完整任务或原生 VBD 比较中的加速。源代码审计、调用计数、模块监督和预算对照见 [可学习物理模块评估](docs/learned_physics_replacement_v31.md)、[v31](docs/shared_material_correction_v31.md) 和 [v32](docs/shared_material_prefix_v32.md)。该研究路线未更换默认推理权重，未完成全部 42 个官方 demo 的重新混训和统一质量回归。
 
 ## 研究边界
 

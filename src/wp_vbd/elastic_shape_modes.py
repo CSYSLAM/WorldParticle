@@ -52,12 +52,13 @@ def polynomial_basis(points,mass):
 def material_basis(points,rest_points,mass):
     """Express coefficients in a material frame carried by two rest-selected rays."""
     rest=rest_points-(rest_points*mass[:,None]).sum(0)/mass.sum()
-    first=int(rest.square().sum(-1).argmax())
-    second=int(torch.linalg.cross(rest[first].expand_as(rest),rest).square().sum(-1).argmax())
+    first=rest.square().sum(-1).argmax().reshape(1)
+    second=torch.linalg.cross(rest.index_select(0,first).expand_as(rest),rest).square().sum(-1).argmax().reshape(1)
     centered=points-(points*mass[None,:,None]).sum(1,keepdim=True)/mass.sum()
-    u=centered[:,first]
+    u=centered.index_select(1,first)[:,0]
     u=u/u.norm(dim=-1,keepdim=True).clamp_min(1e-12)
-    v=centered[:,second]-(centered[:,second]*u).sum(-1,keepdim=True)*u
+    second_ray=centered.index_select(1,second)[:,0]
+    v=second_ray-(second_ray*u).sum(-1,keepdim=True)*u
     v=v/v.norm(dim=-1,keepdim=True).clamp_min(1e-12)
     frame=torch.stack((u,v,torch.linalg.cross(u,v)),-1)
     local=centered@frame

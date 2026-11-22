@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "scope": "Six CLI construction checks, no new rollout",
+  "cases": [
+    {
+      "scene": "franka",
+      "exit_code": 0
+    },
+    {
+      "scene": "cloth",
+      "exit_code": 0
+    },
+    {
+      "scene": "w1",
+      "exit_code": 0
+    },
+    {
+      "scene": "piper",
+      "exit_code": 0
+    },
+    {
+      "scene": "w1_dual",
+      "exit_code": 0
+    },
+    {
+      "scene": "franka_rigid_cloth",
+      "exit_code": 0
+    }
+  ]
+}

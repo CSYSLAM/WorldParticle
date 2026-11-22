@@ -35,6 +35,8 @@ def main():
     parser.add_argument('--soft-tangent-support-scale',type=float,default=512.)
     parser.add_argument('--elastic-shape-response',action=argparse.BooleanOptionalAction,default=True)
     parser.add_argument('--analytic-elastic-postsolve',action=argparse.BooleanOptionalAction,default=None)
+    parser.add_argument('--shared-material-correction',action=argparse.BooleanOptionalAction,default=None)
+    parser.add_argument('--omit-final-material-correction',action='store_true',help='Ablation: omit only the final learned-stage material correction')
     parser.add_argument('--analytic-predictor-rounds',type=int,choices=(0,1,2,3))
     parser.add_argument('--mimic-metric-tangent',action=argparse.BooleanOptionalAction,default=True)
     parser.add_argument('--contact-aware-warm-start',action=argparse.BooleanOptionalAction,default=False,
@@ -134,6 +136,8 @@ def main():
         if not args.elastic_shape_response:parser.error('--analytic-elastic-shape-response requires --elastic-shape-response')
         config['learned_elastic_shape_direction']=False
     from wp_vbd.inference_policy import configure
+    from wp_vbd.shared_material_correction import apply_override
+    apply_override(config,args.shared_material_correction,omit=args.omit_final_material_correction)
     config=configure(config,args.execution_policy)
     network=MixedSolver(config).to(args.device).eval()
     missing,unexpected=network.load_state_dict(stored['model'],strict=False)
@@ -264,6 +268,8 @@ def main():
         r['periodic_bending']=args.periodic_bending
         r['contact_aware_warm_start']=bool(config.get('contact_aware_warm_start',False))
         r['analytic_elastic_postsolve']=bool(config.get('analytic_elastic_postsolve',False))
+        from wp_vbd.shared_material_correction import statistics as material_statistics
+        r['material_correction']=material_statistics(network)
         r['adaptive_steps']=solver.adaptive_stepper is not None
         r['adaptive_retries']=solver.adaptive_retries
         r['adaptive_recovery_modes']=solver.adaptive_recovery_counts

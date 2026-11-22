@@ -28,6 +28,10 @@ def main():
     parser.add_argument('--frames', type=int, help='Shorten or extend the recording; omit for the full validated task')
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--window',action='store_true',help='Display the live inference window')
+    parser.add_argument('--shared-material-correction',action=argparse.BooleanOptionalAction,default=None,
+                        help='Override trained v31 material head only, for Franka/cloth/W1 ablation')
+    parser.add_argument('--omit-final-material-correction',action='store_true',help='Ablation: retain analytic predictors but omit the final material correction')
+    parser.add_argument('--analytic-predictor-rounds',type=int,choices=(0,1,2,3),help='Explicit prefix-budget ablation for Franka/cloth/W1')
     parser.add_argument('--dry-run', action='store_true', help='Print commands without loading the model or running physics')
     args = parser.parse_args()
     args.execution_policy=resolve_policy(args.execution_policy,scene=args.scene,device=args.device)
@@ -35,6 +39,12 @@ def main():
         parser.error('--asset applies to W1 and Piper scenes only')
     if args.frames is not None and args.frames < 1:
         parser.error('--frames must be positive')
+    if args.omit_final_material_correction and args.shared_material_correction is not None:
+        parser.error('Omission and learned/analytic material overrides are mutually exclusive')
+    if (args.shared_material_correction is not None or args.omit_final_material_correction) and args.scene not in ('franka','cloth','w1'):
+        parser.error('Shared material ablation currently applies to Franka/cloth/W1')
+    if args.analytic_predictor_rounds is not None and args.scene not in ('franka','cloth','w1'):
+        parser.error('Prefix-budget ablation currently applies to Franka/cloth/W1')
     recipe = json.loads(args.recipe.expanduser().resolve().read_text())
     if args.scene not in recipe['scenes']:
         parser.error('The selected recipe has no scene named '+args.scene)
@@ -50,7 +60,11 @@ def main():
     if args.asset:
         command += ['--asset', str(args.asset.expanduser().resolve())]
     command += ['--execution-policy',args.execution_policy]
+    if args.shared_material_correction is not None:
+        command.append('--shared-material-correction' if args.shared_material_correction else '--no-shared-material-correction')
     if args.window:command.append('--window')
+    if args.omit_final_material_correction:command.append('--omit-final-material-correction')
+    if args.analytic_predictor_rounds is not None:command+=['--analytic-predictor-rounds',str(args.analytic_predictor_rounds)]
     render_command = [sys.executable, scene['renderer'], '--recording', str(output),
                       '--output', str(output / 'model.mp4')]
     env = dict(os.environ, WP_VBD_NEWTON_ROOT=str(newton_root))

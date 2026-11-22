@@ -1,0 +1,181 @@
+{
+  "schema": "shared_material_prefix_experiment_v32",
+  "status": "PASS_THREE_FIXED_GPU_TASKS",
+  "stable_default_changed": false,
+  "checkpoint_sha256": "b73dbd02f92adcf7ee9b82587fa937c967b1d8f165ecb1974d10cc206c4b5c60",
+  "checkpoint": "joint_train/selected.pt",
+  "optimizer_state": "joint_train/selected.pt.training_state.pt",
+  "cases": {
+    "franka": {
+      "status": "PASS_TASK",
+      "checks": {
+        "one_analytic_prefix": true,
+        "complete": true,
+        "one_analytic_material_solve_per_step": true,
+        "one_learned_material_call_per_step": true,
+        "one_nn_call_per_step": true,
+        "no_retries": true,
+        "no_native_solver": true,
+        "no_teacher": true,
+        "auditors_pass": true,
+        "whole_block_clear_5mm": true,
+        "sustained_250ms": true,
+        "volume_safe": true,
+        "overlap_below_4mm": true,
+        "same_selected_weights": true,
+        "no_optimizer_updates": true,
+        "gpu_network": true,
+        "gpu_physics": true
+      },
+      "frames": 270,
+      "physical_steps": 810,
+      "nn_calls": 810,
+      "analytic_material_solves": 810,
+      "learned_material_calls": 810,
+      "wall_seconds": 268.1055611409829,
+      "reported_fps": 1.0070660185150764,
+      "video": "candidate/videos/franka.mp4"
+    },
+    "cloth": {
+      "status": "PASS_TASK",
+      "checks": {
+        "one_analytic_prefix": true,
+        "complete": true,
+        "one_analytic_material_solve_per_step": true,
+        "one_learned_material_call_per_step": true,
+        "one_nn_call_per_step": true,
+        "no_retries": true,
+        "no_native_solver": true,
+        "no_teacher": true,
+        "auditors_pass": true,
+        "original_task_gate": true,
+        "same_selected_weights": true,
+        "no_optimizer_updates": true,
+        "gpu_network": true,
+        "gpu_physics": true
+      },
+      "frames": 168,
+      "physical_steps": 504,
+      "nn_calls": 504,
+      "analytic_material_solves": 504,
+      "learned_material_calls": 504,
+      "wall_seconds": 172.2483054769691,
+      "reported_fps": 0.9753361551789713,
+      "video": "candidate/videos/cloth.mp4"
+    },
+    "w1": {
+      "status": "PASS_TASK",
+      "checks": {
+        "one_analytic_prefix": true,
+        "complete": true,
+        "one_analytic_material_solve_per_step": true,
+        "one_learned_material_call_per_step": true,
+        "one_nn_call_per_step": true,
+        "no_retries": true,
+        "no_native_solver": true,
+        "no_teacher": true,
+        "auditors_pass": true,
+        "original_task_gate": true,
+        "same_selected_weights": true,
+        "no_optimizer_updates": true,
+        "gpu_network": true,
+        "gpu_physics": true
+      },
+      "frames": 288,
+      "physical_steps": 878,
+      "nn_calls": 878,
+      "analytic_material_solves": 878,
+      "learned_material_calls": 878,
+      "wall_seconds": 321.48737842804985,
+      "reported_fps": 0.8958361022078368,
+      "video": "candidate/videos/w1.mp4"
+    }
+  },
+  "held_state_benchmark": {
+    "scope": "Seven interleaved warmed samples per algorithm at one fixed Franka state, SAME v31 weights, controller and in-memory recording included; no whole-task speedup guarantee",
+    "summary": {
+      "reference": {
+        "median_seconds": 0.5658819450181909,
+        "samples": 7,
+        "speedup_vs_reference": 1.0,
+        "held_frame_fps": 1.767153041024933
+      },
+      "material_analytic": {
+        "median_seconds": 0.5706029879511334,
+        "samples": 7,
+        "speedup_vs_reference": 0.9917262211509015,
+        "held_frame_fps": 1.752532007570981
+      },
+      "material_omit": {
+        "median_seconds": 0.5631177900359035,
+        "samples": 7,
+        "speedup_vs_reference": 1.0049086621506154,
+        "held_frame_fps": 1.7758273982717572
+      },
+      "prefix_one_learned": {
+        "median_seconds": 0.45512106304522604,
+        "samples": 7,
+        "speedup_vs_reference": 1.2433657568644727,
+        "held_frame_fps": 2.1972175783493206
+      }
+    },
+    "required_checks": {
+      "finite_timings": true,
+      "same_neural_budget": true,
+      "same_physical_steps": true,
+      "same_controller_targets": true,
+      "correct_controller_cadence": true,
+      "no_retries": true,
+      "correct_material_stage_budgets": true
+    },
+    "numerical_equivalence": false
+  },
+  "full_franka_budget_control": {
+    "checks": {
+      "same_weights": true,
+      "same_frames": true,
+      "same_steps": true,
+      "same_initial_asset": true,
+      "same_nn_calls": true,
+      "a2_prefix": true,
+      "zero_retries": true,
+      "whole_block_lifted": true,
+      "safe_volume": true,
+      "overlap_below_4mm": true
+    },
+    "a2_wall_seconds": 347.12086414400255,
+    "a1_wall_seconds": 268.1055611409829,
+    "a2_reported_fps": 0.7778270564802204,
+    "a1_reported_fps": 1.0070660185150764,
+    "same_v32_weights": true,
+    "other_gpu_jobs_observed": true,
+    "scope": "Single sequential pair on a shared GPU; concurrent jobs and first-call compilation prevent an isolated causal whole-task speedup claim"
+  },
+  "limitations": [
+    "Three fixed authored assets and parameter recipes; not all 42 official demos, other robot demos or unseen assets",
+    "Only 72 trajectories used in this fine-tuning experiment; 300-trajectory full replay still pending",
+    "64-update budget exhausted while development loss still improving; no plateau claim",
+    "Material readout applies only to surface/joint v38; other replay contracts retain explicitly configured analytic material response",
+    "Nominal physical dt unchanged; adaptive-large-dt training not demonstrated",
+    "Contact detection, residual/H assembly, protected coarse solve, projection and acceptance remain explicit",
+    "Video playback rate is independent of measured inference speed"
+  ],
+  "training": {
+    "status": "COMPLETE_TRAINING_FIXED_GPU_TASKS_VALIDATED",
+    "updates": 64,
+    "selected_update": 64,
+    "stop_reason": "Reached the 64-update experiment budget; development loss was still improving, not a demonstrated plateau",
+    "initial_development_loss": 0.7603960421342757,
+    "selected_development_loss": 0.6186542957960359,
+    "initial_replay_loss": 0.591388428578917,
+    "selected_replay_loss": 0.5844219196056891,
+    "unique_training_trajectories": 72,
+    "training_coverage": {
+      "robot_cloth": 6,
+      "augmentation": 64,
+      "robot_replay": 2
+    },
+    "trainable_parameters": 47136211,
+    "observed_gpu_process_peak_mib": 4324.0
+  }
+}
